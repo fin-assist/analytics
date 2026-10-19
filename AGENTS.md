@@ -4,8 +4,7 @@ The Go service `analytics` of «Понятные финансы» (B2C personal 
 analytics, LLM assistant): it stores the ready personal metrics `bank-statement-data` sends and builds the Analytics
 screen from them; it calculates nothing itself (`docs/grpc-api.md` 7.3 in `fin-assist/contracts`). Made from
 `fin-assist/go-service-template`. Read by Claude Code (through `CLAUDE.md`) and by Codex. This file is the orientation
-map: read it and `README.md` first, then open only what the task touches. The database schema and its invariants —
-`docs/schema.md`.
+map: read it and `README.md` first, then open only what the task touches.
 
 ## Keep this file current
 
@@ -81,7 +80,7 @@ the PR with why it is needed.
   `T=$(go env GOTOOLDIR); chmod u+w "$T"; go build -o "$T/covdata" cmd/covdata`.
 - The image needs Docker; without it say in the PR that the image was built only by the CI job `image`.
 - Every test or lint run gets a timeout (`timeout 600 make test` or the tool's own): a hung run blocks the session.
-- A local `serve` for a smoke check: `ENV=dev AUTH_MODE=insecure-dev SERVICE_NAME=service DB_PRIMARY_DSN=… make run`;
+- A local `serve` for a smoke check: `ENV=dev AUTH_MODE=insecure-dev SERVICE_NAME=analytics DB_PRIMARY_DSN=… make run`;
   `/readyz` on `HTTP_ADDR` answers when the database does.
 
 ## Principles
