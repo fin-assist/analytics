@@ -773,6 +773,92 @@ func TestReadQueries(t *testing.T) {
 	})
 }
 
+// Navigation, the latest period and ListPeriods across a year boundary for every period type.
+// For keys of the contract grammar (docs/schema.md, «Инварианты в коде сервиса») byte order in
+// COLLATE "C" is calendar order; the year boundary is where a wrong order would show first.
+// Keys of that grammar sort the same in any sane collation, so the collation of the column is
+// asserted from the catalog: the order of the index must not depend on the database locale.
+func TestReadQueriesAcrossYearBoundary(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	user := newUser(1)
+	if _, err := upsertState(ctx, db, user, 1, validState()); err != nil {
+		t.Fatal(err)
+	}
+
+	var collation string
+	if err := db.QueryRow(ctx, `SELECT c.collname FROM pg_attribute a JOIN pg_collation c ON c.oid = a.attcollation
+		WHERE a.attrelid = 'period_snapshot'::regclass AND a.attname = 'period_key'`).Scan(&collation); err != nil {
+		t.Fatal(err)
+	}
+	if collation != "C" {
+		t.Fatalf("period_key collation %q, want C", collation)
+	}
+
+	cases := []struct {
+		name           string
+		typ            int16
+		older, newer   string
+		removedAfter   string // a removal marker later than newer: not a period with data
+		olderInTheYear string // an earlier key of the older year, inserted last
+	}{
+		{"month", month, "2025-12", "2026-01", "2026-02", "2025-11"},
+		{"quarter", quarter, "2025-Q4", "2026-Q1", "2026-Q2", "2025-Q3"},
+		{"year", year, "2025", "2026", "2027", "2024"},
+	}
+	for _, c := range cases {
+		// Newest first, so the stored order is not the insertion order.
+		ps := []period{snapshotRow(c.typ, c.newer, withTransfers, c.newer), snapshotRow(c.typ, c.older, withTransfers, c.older)}
+		ps = append(ps, removal(c.typ, c.removedAfter)...)
+		ps = append(ps, snapshotRow(c.typ, c.olderInTheYear, withTransfers, c.olderInTheYear))
+		if _, err := upsertPeriods(ctx, db, user, 1, ps); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+	}
+
+	nav := `SELECT q.snapshot, q.previous, q.next FROM (` + readAnalyticsSQL + `) q`
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var latest string
+			if err := db.QueryRow(ctx, latestPeriodSQL, user, c.typ).Scan(&latest); err != nil || latest != c.newer {
+				t.Fatalf("latest %q, %v; want %s", latest, err, c.newer)
+			}
+
+			var snapshot []byte
+			var previous, next *string
+			if err := db.QueryRow(ctx, nav, user, c.typ, c.older, withTransfers).Scan(&snapshot, &previous, &next); err != nil {
+				t.Fatal(err)
+			}
+			if string(snapshot) != c.older || deref(previous) != c.olderInTheYear || deref(next) != c.newer {
+				t.Fatalf("%s: snapshot %q navigation %s / %s, want %s / %s", c.older, snapshot, deref(previous), deref(next), c.olderInTheYear, c.newer)
+			}
+			if err := db.QueryRow(ctx, nav, user, c.typ, c.newer, withTransfers).Scan(&snapshot, &previous, &next); err != nil {
+				t.Fatal(err)
+			}
+			if string(snapshot) != c.newer || deref(previous) != c.older || next != nil {
+				t.Fatalf("%s: snapshot %q navigation %s / %s, want %s / none (%s is removed)", c.newer, snapshot, deref(previous), deref(next), c.older, c.removedAfter)
+			}
+
+			rows, err := db.Query(ctx, listPeriodsSQL, user, c.typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+			keys, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (string, error) {
+				var key string
+				var s, e time.Time
+				var coverage int16
+				return key, r.Scan(&key, &s, &e, &coverage)
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := []string{c.newer, c.older, c.olderInTheYear}; !slices.Equal(keys, want) {
+				t.Fatalf("periods %v, want %v", keys, want)
+			}
+		})
+	}
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return "<none>"
