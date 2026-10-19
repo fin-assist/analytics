@@ -5,9 +5,13 @@
 -- Integers are sized by their range (Confluence «Архитектура» → «Идентификаторы»): enum numbers
 -- of the contract fit smallint, full_months is int32 in the contract. The rule targets counters
 -- and IDs, none of which are here.
-
+--
+-- The schema keeps only PRIMARY KEY, UNIQUE, FOREIGN KEY, NOT NULL and DEFAULT, and no triggers or
+-- functions (owner's decision of 19.10.2026); value rules are checked by the service code before
+-- writing — docs/schema.md, «Инварианты в коде сервиса».
+--
 -- Enum columns hold the numbers of the contract enums (finassist.common.v1): numbers are never
--- reused in proto, names may be. Zero (*_UNSPECIFIED) is never stored.
+-- reused in proto, names may be. Zero (*_UNSPECIFIED) is never written.
 
 -- State of the user's data (UserDataState): one row per user, versioned on its own.
 CREATE TABLE user_data_state (
@@ -31,20 +35,7 @@ CREATE TABLE user_data_state (
     calculated_at     timestamptz NOT NULL,
     -- Technical: when this service last applied the row.
     applied_at        timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT user_data_state_pkey PRIMARY KEY (user_id),
-    CONSTRAINT user_data_state_calc_version_check CHECK (calc_version > 0),
-    CONSTRAINT user_data_state_bounds_check CHECK (
-        (data_from IS NULL) = (data_to IS NULL) AND data_from < data_to
-    ),
-    -- stale_after is data_to + 14 calendar days in the profile zone, so always after data_to.
-    CONSTRAINT user_data_state_stale_after_check CHECK (
-        (stale_after IS NULL) = (data_to IS NULL) AND stale_after > data_to
-    ),
-    CONSTRAINT user_data_state_has_data_check CHECK (
-        NOT has_data OR (data_from IS NOT NULL AND last_operation_at IS NOT NULL)
-    ),
-    CONSTRAINT user_data_state_full_months_check CHECK (full_months >= 0),
-    CONSTRAINT user_data_state_time_zone_check CHECK (time_zone <> '' AND length(time_zone) <= 64)
+    CONSTRAINT user_data_state_pkey PRIMARY KEY (user_id)
 );
 
 COMMENT ON TABLE user_data_state IS
@@ -66,33 +57,15 @@ CREATE TABLE period_snapshot (
     -- Projection of the snapshot for SQL (ListPeriods); NULL in a removal marker.
     range_start   timestamptz,
     range_end     timestamptz,
-    -- finassist.common.v1.Coverage of the period: 1 complete, 2 partial. A snapshot exists
-    -- only for a period with covered days, so 3 (no data) is never stored.
+    -- finassist.common.v1.Coverage of the period: 1 complete, 2 partial (a snapshot exists only
+    -- for a period with covered days); NULL in a removal marker.
     coverage      smallint,
     -- The PeriodSnapshot message as received (protobuf wire format): bounds, unread lines,
     -- calculated_at and every MetricSnapshot with its definition_version. Unknown fields and
     -- unknown metric_id survive as they are. NULL: the period was removed.
     snapshot      bytea,
     applied_at    timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT period_snapshot_pkey PRIMARY KEY (user_id, period_type, period_key, transfer_mode),
-    CONSTRAINT period_snapshot_calc_version_check CHECK (calc_version > 0),
-    CONSTRAINT period_snapshot_period_type_check CHECK (period_type IN (1, 2, 3)),
-    CONSTRAINT period_snapshot_transfer_mode_check CHECK (transfer_mode IN (1, 2)),
-    CONSTRAINT period_snapshot_period_key_check CHECK (
-        CASE period_type
-            WHEN 1 THEN period_key ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'
-            WHEN 2 THEN period_key ~ '^[0-9]{4}-Q[1-4]$'
-            WHEN 3 THEN period_key ~ '^[0-9]{4}$'
-        END
-    ),
-    CONSTRAINT period_snapshot_removed_check CHECK (
-        CASE WHEN snapshot IS NULL
-            THEN range_start IS NULL AND range_end IS NULL AND coverage IS NULL
-            ELSE range_start IS NOT NULL AND range_end IS NOT NULL AND coverage IS NOT NULL
-        END
-    ),
-    CONSTRAINT period_snapshot_range_check CHECK (range_start < range_end),
-    CONSTRAINT period_snapshot_coverage_check CHECK (coverage IN (1, 2))
+    CONSTRAINT period_snapshot_pkey PRIMARY KEY (user_id, period_type, period_key, transfer_mode)
 );
 
 COMMENT ON TABLE period_snapshot IS

@@ -268,21 +268,28 @@ func storedPeriod(t *testing.T, db *pgxpool.Pool, user string, typ int16, key st
 	return s, true
 }
 
-// wantViolation asserts that err is the violation of the named constraint.
-func wantViolation(t *testing.T, err error, code, constraint string) {
+// wantViolation asserts that err is the violation of the named constraint (or of NOT NULL on
+// the named column).
+func wantViolation(t *testing.T, err error, code, name string) {
 	t.Helper()
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
-		t.Fatalf("error %v, want %s %s", err, code, constraint)
+		t.Fatalf("error %v, want %s %s", err, code, name)
 	}
-	if pgErr.Code != code || pgErr.ConstraintName != constraint {
-		t.Fatalf("violation %s %q (%s), want %s %q", pgErr.Code, pgErr.ConstraintName, pgErr.Message, code, constraint)
+	got := pgErr.ConstraintName
+	if code == notNullViolation {
+		got = pgErr.ColumnName
+	}
+	if pgErr.Code != code || got != name {
+		t.Fatalf("violation %s %q (%s), want %s %q", pgErr.Code, got, pgErr.Message, code, name)
 	}
 }
 
-const checkViolation, uniqueViolation = "23514", "23505"
+const notNullViolation, uniqueViolation = "23502", "23505"
 
-func TestUserDataStateInvariants(t *testing.T) {
+// The schema keeps only keys and NOT NULL (docs/schema.md, «Инварианты в коде сервиса»):
+// every shape of a valid state is accepted, required columns are required.
+func TestUserDataStateConstraints(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 
@@ -300,35 +307,37 @@ func TestUserDataStateInvariants(t *testing.T) {
 		t.Fatalf("covered days without operations: %v", err)
 	}
 
-	cases := []struct {
-		name       string
-		version    int64
-		edit       func(*state)
-		constraint string
-	}{
-		{"zero calc_version", 0, func(*state) {}, "user_data_state_calc_version_check"},
-		{"data_from without data_to", 1, func(s *state) { s.dataTo, s.stale = nil, nil }, "user_data_state_bounds_check"},
-		{"data_to without data_from", 1, func(s *state) { s.dataFrom = nil }, "user_data_state_bounds_check"},
-		{"empty bounds", 1, func(s *state) { s.dataTo = s.dataFrom }, "user_data_state_bounds_check"},
-		{"stale_after without bounds", 1, func(s *state) { s.hasData, s.dataFrom, s.dataTo = false, nil, nil }, "user_data_state_stale_after_check"},
-		{"bounds without stale_after", 1, func(s *state) { s.stale = nil }, "user_data_state_stale_after_check"},
-		{"stale_after not after data_to", 1, func(s *state) { s.stale = s.dataTo }, "user_data_state_stale_after_check"},
-		{"has_data without operations", 1, func(s *state) { s.lastOperation = nil }, "user_data_state_has_data_check"},
-		{"negative full_months", 1, func(s *state) { s.fullMonths = -1 }, "user_data_state_full_months_check"},
-		{"empty time zone", 1, func(s *state) { s.timeZone = "" }, "user_data_state_time_zone_check"},
-		{"long time zone", 1, func(s *state) { s.timeZone = strings.Repeat("a", 65) }, "user_data_state_time_zone_check"},
+	insert := func(column string, value any) error {
+		args := map[string]any{
+			"user_id": newUser(10), "calc_version": int64(1), "has_data": false, "full_months": int32(0),
+			"recalculating": false, "time_zone": "Europe/Moscow", "calculated_at": time.Now(),
+		}
+		args[column] = value
+		_, err := db.Exec(ctx, `INSERT INTO user_data_state
+			(user_id, calc_version, has_data, full_months, recalculating, time_zone, calculated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			args["user_id"], args["calc_version"], args["has_data"], args["full_months"],
+			args["recalculating"], args["time_zone"], args["calculated_at"])
+		return err
 	}
-	for i, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			s := validState()
-			c.edit(&s)
-			_, err := upsertState(ctx, db, newUser(100+i), c.version, s)
-			wantViolation(t, err, checkViolation, c.constraint)
+	for _, column := range []string{"user_id", "calc_version", "has_data", "full_months", "recalculating", "time_zone", "calculated_at"} {
+		t.Run(column+" is required", func(t *testing.T) {
+			wantViolation(t, insert(column, nil), notNullViolation, column)
 		})
+	}
+
+	_, err := db.Exec(ctx, `INSERT INTO user_data_state
+		(user_id, calc_version, has_data, full_months, recalculating, time_zone, calculated_at)
+		VALUES ($1, 1, false, 0, false, 'UTC', now())`, newUser(1))
+	wantViolation(t, err, uniqueViolation, "user_data_state_pkey")
+
+	var applied time.Time
+	if err := db.QueryRow(ctx, `SELECT applied_at FROM user_data_state WHERE user_id = $1`, newUser(1)).Scan(&applied); err != nil || applied.IsZero() {
+		t.Fatalf("applied_at %v, %v; want the default now()", applied, err)
 	}
 }
 
-func TestPeriodSnapshotInvariants(t *testing.T) {
+func TestPeriodSnapshotConstraints(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -343,48 +352,31 @@ func TestPeriodSnapshotInvariants(t *testing.T) {
 		t.Fatalf("valid rows: %v", err)
 	}
 
-	insert := func(p period, version int64) error {
+	insert := func(column string) error {
+		args := map[string]any{
+			"user_id": user, "period_type": month, "period_key": "2026-10", "transfer_mode": withTransfers,
+			"calc_version": int64(1),
+		}
+		args[column] = nil
 		_, err := db.Exec(ctx, `INSERT INTO period_snapshot
-			(user_id, period_type, period_key, transfer_mode, calc_version, range_start, range_end, coverage, snapshot)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			user, p.typ, p.key, p.mode, version, p.start, p.end, p.coverage, p.snapshot)
+			(user_id, period_type, period_key, transfer_mode, calc_version) VALUES ($1, $2, $3, $4, $5)`,
+			args["user_id"], args["period_type"], args["period_key"], args["transfer_mode"], args["calc_version"])
 		return err
 	}
-	edit := func(p period, f func(*period)) period { f(&p); return p }
-	base := snapshotRow(month, "2026-10", withTransfers, "x")
-
-	cases := []struct {
-		name       string
-		row        period
-		version    int64
-		code       string
-		constraint string
-	}{
-		{"zero calc_version", base, 0, checkViolation, "period_snapshot_calc_version_check"},
-		{"unspecified period type", edit(base, func(p *period) { p.typ = 0 }), 1, checkViolation, "period_snapshot_period_type_check"},
-		{"unknown period type", edit(base, func(p *period) { p.typ = 4 }), 1, checkViolation, "period_snapshot_period_type_check"},
-		{"unspecified transfer mode", edit(base, func(p *period) { p.mode = 0 }), 1, checkViolation, "period_snapshot_transfer_mode_check"},
-		{"month 13", edit(base, func(p *period) { p.key = "2026-13" }), 1, checkViolation, "period_snapshot_period_key_check"},
-		{"quarter key for a month", edit(base, func(p *period) { p.key = "2026-Q3" }), 1, checkViolation, "period_snapshot_period_key_check"},
-		{"quarter 5", edit(base, func(p *period) { p.typ, p.key = quarter, "2026-Q5" }), 1, checkViolation, "period_snapshot_period_key_check"},
-		{"month key for a year", edit(base, func(p *period) { p.typ, p.key = year, "2026-09" }), 1, checkViolation, "period_snapshot_period_key_check"},
-		{"key with spaces", edit(base, func(p *period) { p.key = " 2026-10" }), 1, checkViolation, "period_snapshot_period_key_check"},
-		{"snapshot without range", edit(base, func(p *period) { p.start, p.end = nil, nil }), 1, checkViolation, "period_snapshot_removed_check"},
-		{"snapshot without coverage", edit(base, func(p *period) { p.coverage = nil }), 1, checkViolation, "period_snapshot_removed_check"},
-		{"marker with range", edit(base, func(p *period) { p.snapshot = nil }), 1, checkViolation, "period_snapshot_removed_check"},
-		{"empty range", edit(base, func(p *period) { p.end = p.start }), 1, checkViolation, "period_snapshot_range_check"},
-		{"coverage no_data", edit(base, func(p *period) { p.coverage = ptr(int16(commonv1.Coverage_COVERAGE_NO_DATA)) }), 1, checkViolation, "period_snapshot_coverage_check"},
-		{"second row of a key", snapshotRow(month, "2026-09", withTransfers, "dup"), 1, uniqueViolation, "period_snapshot_pkey"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			wantViolation(t, insert(c.row, c.version), c.code, c.constraint)
+	for _, column := range []string{"user_id", "period_type", "period_key", "transfer_mode", "calc_version"} {
+		t.Run(column+" is required", func(t *testing.T) {
+			wantViolation(t, insert(column), notNullViolation, column)
 		})
 	}
 
+	_, err := db.Exec(ctx, `INSERT INTO period_snapshot
+		(user_id, period_type, period_key, transfer_mode, calc_version) VALUES ($1, $2, $3, $4, 1)`,
+		user, month, "2026-09", withTransfers)
+	wantViolation(t, err, uniqueViolation, "period_snapshot_pkey")
+
 	// A key twice in one request (a period both sent and removed) fails the whole statement:
 	// the handler validates the request before writing.
-	_, err := upsertPeriods(ctx, db, user, 2, append([]period{snapshotRow(month, "2026-07", withTransfers, "a")}, removal(month, "2026-07")...))
+	_, err = upsertPeriods(ctx, db, user, 2, append([]period{snapshotRow(month, "2026-07", withTransfers, "a")}, removal(month, "2026-07")...))
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "21000" {
 		t.Fatalf("duplicate key in one request: %v, want 21000 cardinality_violation", err)
