@@ -49,7 +49,7 @@ updates them in the same PR. A service made from the template rewrites the first
 | Pools, transaction manager, repositories | `internal/adapter/postgres/`; rules — `docs/migrations.md`, «Запросы на pgx» |
 | Migration runner and the PostgreSQL for tests | `internal/adapter/postgres/migrate/`, `migratetest/` |
 | SQL migrations (embedded) | `migrations/`; rules — `docs/migrations.md` |
-| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; tests on PostgreSQL — `migrations/schema_test.go` |
+| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the proposed SQL and the `PeriodSnapshot` ↔ rows mapping — `migrations/snapshot_rows_test.go`; tests on PostgreSQL — `migrations/schema_test.go` |
 | Clients of other services, service token source | `internal/adapter/client/` |
 | Background jobs | `internal/worker/` |
 | Configuration: every variable with its default and description | `internal/config/vars.go` (`Vars`); generated tables — `docs/config.md` |
