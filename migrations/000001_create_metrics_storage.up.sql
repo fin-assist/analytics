@@ -50,11 +50,16 @@ COMMENT ON TABLE user_data_state IS
 COMMENT ON COLUMN user_data_state.user_id IS 'Идентификатор пользователя из сервиса user.';
 COMMENT ON COLUMN user_data_state.calc_version IS
     'Версия расчёта запроса, который записал строку. Запрос применяется, если его calc_version не меньше этой.';
-COMMENT ON COLUMN user_data_state.has_data IS 'Есть ли у пользователя хоть одна операция и хоть один покрытый выпиской день.';
+COMMENT ON COLUMN user_data_state.has_data IS
+    'Есть ли у пользователя хоть одна операция и хоть один покрытый день — день внутри периода выписки '
+    '(DTSTART..DTEND) какой-либо загрузки, а не день с операциями (calc.md 4).';
 COMMENT ON COLUMN user_data_state.data_from IS
-    'Начало первого покрытого дня по всем загрузкам. Нет вместе с data_to, если покрытых дней нет.';
+    'Начало (00:00 в поясе профиля) первого покрытого дня по всем загрузкам; покрытый день — день внутри '
+    'периода выписки (DTSTART..DTEND), а не день с операциями (calc.md 4). Нет вместе с data_to, если покрытых '
+    'дней нет.';
 COMMENT ON COLUMN user_data_state.data_to IS
-    'Начало дня после последнего покрытого дня (полуинтервал). Нет вместе с data_from, если покрытых дней нет.';
+    'Начало дня, следующего за последним покрытым днём по всем загрузкам (конец не включая); покрытый день — '
+    'день внутри периода выписки (DTSTART..DTEND). Нет вместе с data_from, если покрытых дней нет.';
 COMMENT ON COLUMN user_data_state.last_operation_at IS 'Время последней загруженной операции по всем загрузкам. Нет, если операций нет.';
 COMMENT ON COLUMN user_data_state.stale_after IS
     'Момент, с которого данные устарели; считает bank-statement-data. Нет, если покрытых дней нет.';
@@ -115,16 +120,23 @@ COMMENT ON COLUMN period_snapshot.calc_version IS
 COMMENT ON COLUMN period_snapshot.removed IS
     'Отметка удалённого периода (removed_periods): true — данных за период нет, поля данных пусты, '
     'пропусков и метрик нет; строка хранит только версию.';
-COMMENT ON COLUMN period_snapshot.range_start IS 'Начало периода (PeriodSnapshot.range.start). Нет у отметки удалённого периода.';
+COMMENT ON COLUMN period_snapshot.range_start IS
+    'Календарное начало самого периода в поясе профиля (PeriodSnapshot.range.start): для месяца 2026-09 — '
+    '1 сентября 2026, 00:00. Не зависит от выписок. Нет у отметки удалённого периода.';
 COMMENT ON COLUMN period_snapshot.range_end IS
-    'Конец периода, не включая (PeriodSnapshot.range.end). Нет у отметки удалённого периода.';
+    'Календарный конец самого периода в поясе профиля, не включая (PeriodSnapshot.range.end): для месяца 2026-09 — '
+    '1 октября 2026, 00:00. Не зависит от выписок. Нет у отметки удалённого периода.';
 COMMENT ON COLUMN period_snapshot.coverage IS
-    'Покрытие периода (bounds.coverage), номер finassist.common.v1.Coverage: 1 — полный, 2 — частичный. '
-    'Нет у отметки удалённого периода.';
+    'Покрыт ли период выписками полностью или частично (bounds.coverage) — по периодам выписок (DTSTART..DTEND), '
+    'а не по дням с операциями; номер finassist.common.v1.Coverage: 1 — полностью (период закончился и покрыт '
+    'каждый день), 2 — частично. Нет у отметки удалённого периода.';
 COMMENT ON COLUMN period_snapshot.data_from IS
-    'Начало первого покрытого дня в периоде (bounds.data_from). Нет — покрытых дней нет или это отметка удаления.';
+    'С какого момента период покрыт выписками (bounds.data_from): начало (00:00) первого покрытого дня в периоде; '
+    'покрытый день — день внутри периода выписки (DTSTART..DTEND), а не день с операциями (calc.md 4). При полном '
+    'покрытии совпадает с range_start. Нет — покрытых дней нет или это отметка удаления.';
 COMMENT ON COLUMN period_snapshot.data_to IS
-    'Время последней операции в последний покрытый день периода или конец этого дня (bounds.data_to). '
+    'До какого момента период покрыт выписками (bounds.data_to): время последней операции, если она в последний '
+    'покрытый день периода, иначе конец этого дня (23:59:59). При полном покрытии это последний день периода. '
     'Нет — покрытых дней нет или это отметка удаления.';
 COMMENT ON COLUMN period_snapshot.unread_lines_count IS
     'Незакрытых непрочитанных строк выписок за период (FIN-79). Нет у отметки удалённого периода.';
