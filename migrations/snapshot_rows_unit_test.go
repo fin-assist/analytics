@@ -7,6 +7,8 @@ package migrations_test
 import (
 	"errors"
 	"math"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,6 +107,68 @@ func TestHeaderOfRefusesCoverageOutOfRange(t *testing.T) {
 	h, err := headerOf(s)
 	if err != nil || *h.coverage != complete || h.removed {
 		t.Fatalf("header %+v, %v", h, err)
+	}
+}
+
+// A snapshot header without its data is refused on write as on read.
+func TestHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
+	cases := map[string]func(s *analyticsv1.PeriodSnapshot){
+		"no range":         func(s *analyticsv1.PeriodSnapshot) { s.Range = nil },
+		"no range end":     func(s *analyticsv1.PeriodSnapshot) { s.Range.End = nil },
+		"no bounds":        func(s *analyticsv1.PeriodSnapshot) { s.Bounds = nil },
+		"coverage unset":   func(s *analyticsv1.PeriodSnapshot) { s.Bounds.Coverage = commonv1.Coverage_COVERAGE_UNSPECIFIED },
+		"no calculated_at": func(s *analyticsv1.PeriodSnapshot) { s.CalculatedAt = nil },
+	}
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := snapshot(month, "2026-09", withTransfers, 1)
+			change(s)
+			if _, err := headerOf(s); !errors.Is(err, errBrokenHeader) {
+				t.Fatalf("error %v, want %v", err, errBrokenHeader)
+			}
+		})
+	}
+}
+
+// The mapping alone, without PostgreSQL: PeriodSnapshot → header, gap and metric rows →
+// PeriodSnapshot is the same message, for every column and every kind of details. The same
+// snapshot goes through the tables in TestSnapshotRoundTrip.
+func TestMappingRoundTrip(t *testing.T) {
+	for name, in := range map[string]*analyticsv1.PeriodSnapshot{
+		"every column and every kind of details": richSnapshot(),
+		"no metrics, gaps and data bounds":       snapshot(quarter, "2026-Q3", withoutTransfers, 0),
+	} {
+		t.Run(name, func(t *testing.T) {
+			h, err := headerOf(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gaps, err := gapsOf(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var starts, ends []time.Time
+			for _, g := range gaps {
+				starts, ends = append(starts, *g.start), append(ends, *g.end)
+			}
+			var metrics []metricRow
+			for _, ms := range in.GetMetrics() {
+				r, err := metricOf(keyOf(in), ms)
+				if err != nil {
+					t.Fatal(err)
+				}
+				metrics = append(metrics, r)
+			}
+			// The read returns metrics in metric_id order (ORDER BY in readAnalyticsSQL).
+			slices.SortFunc(metrics, func(a, b metricRow) int { return strings.Compare(a.metricID, b.metricID) })
+			got, err := snapshotOf(keyOf(in), h, starts, ends, metrics)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := sortedByMetricID(in); !proto.Equal(got, want) {
+				t.Fatalf("snapshot came back as\n%v\nwant\n%v", got, want)
+			}
+		})
 	}
 }
 

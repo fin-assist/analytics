@@ -274,6 +274,12 @@ func enumOf[E ~int32](n *int16) E {
 }
 
 func headerOf(s *analyticsv1.PeriodSnapshot) (headerRow, error) {
+	// The same rule as the read (snapshotOf): a snapshot header without its data is refused
+	// here, so a producer's error fails the request instead of leaving an unreadable period.
+	if s.GetRange().GetStart() == nil || s.GetRange().GetEnd() == nil ||
+		s.GetBounds().GetCoverage() == commonv1.Coverage_COVERAGE_UNSPECIFIED || s.GetCalculatedAt() == nil {
+		return headerRow{}, fmt.Errorf("%w: snapshot %s without range, coverage or calculated_at", errBrokenHeader, s.GetPeriodKey())
+	}
 	coverage, err := enumColumn(s.GetBounds().GetCoverage())
 	if err != nil {
 		return headerRow{}, fmt.Errorf("coverage of %s: %w", s.GetPeriodKey(), err)
