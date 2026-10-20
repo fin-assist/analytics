@@ -153,7 +153,7 @@ func TestHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
 func TestMappingRoundTrip(t *testing.T) {
 	for name, in := range map[string]*analyticsv1.PeriodSnapshot{
 		"every column and every kind of details": richSnapshot(),
-		"no metrics, gaps and data bounds":       snapshot(quarter, "2026-Q3", withoutTransfers, 0),
+		"no metrics, gaps and data bounds":       snapshotWithoutDataBounds(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			h, err := headerOf(in)
@@ -186,6 +186,18 @@ func TestMappingRoundTrip(t *testing.T) {
 				t.Fatalf("snapshot came back as\n%v\nwant\n%v", got, want)
 			}
 		})
+	}
+}
+
+// snapshotWithoutDataBounds has neither data_from nor data_to (both columns NULL), no gaps and no
+// metrics.
+func snapshotWithoutDataBounds() *analyticsv1.PeriodSnapshot {
+	start, end := periodRange(quarter, "2026-Q3")
+	return &analyticsv1.PeriodSnapshot{
+		Period: commonv1.PeriodType_PERIOD_TYPE_QUARTER, PeriodKey: "2026-Q3", TransferMode: commonv1.TransferMode_TRANSFER_MODE_WITHOUT,
+		Range:        timeRange(start, end),
+		Bounds:       &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_COMPLETE},
+		CalculatedAt: at(time.Date(2026, 9, 25, 21, 52, 0, 0, msk)),
 	}
 }
 
