@@ -49,6 +49,7 @@ updates them in the same PR. A service made from the template rewrites the first
 | Pools, transaction manager, repositories | `internal/adapter/postgres/`; rules — `docs/migrations.md`, «Запросы на pgx» |
 | Migration runner and the PostgreSQL for tests | `internal/adapter/postgres/migrate/`, `migratetest/` |
 | SQL migrations (embedded) | `migrations/`; rules — `docs/migrations.md` |
+| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the proposed SQL and the `PeriodSnapshot` ↔ rows mapping — `migrations/snapshot_rows_test.go`; tests on PostgreSQL — `migrations/schema_test.go`, unit tests of the mapping — `migrations/snapshot_rows_unit_test.go` |
 | Clients of other services, service token source | `internal/adapter/client/` |
 | Background jobs | `internal/worker/` |
 | Configuration: every variable with its default and description | `internal/config/vars.go` (`Vars`); generated tables — `docs/config.md` |
@@ -117,6 +118,8 @@ Priorities when they pull apart, in this order:
 
 - Code, comments, identifiers, commit messages — English. `docs/*.md`, `README.md`, PR title and description —
   Russian. Comments where the logic is not obvious; a doc comment on every exported identifier.
+  Exception: `COMMENT ON TABLE` and `COMMENT ON COLUMN` in migrations are Russian, one for every table and
+  column (owner's request, FIN-113; `docs/migrations.md`, «Описания таблиц и столбцов»).
 - Layers: `domain` ← `<feature>` ← adapters ← `cmd`. A usecase declares the interface it needs (consumer side) and
   never imports an adapter, pgx or gRPC; a handler converts messages and calls a usecase; `wire()` connects them.
 - Errors to callers: only `finerr` constructors (`finerr.NotFound()`, `finerr.LimitExceeded(resetsAt)`).
