@@ -135,6 +135,8 @@ func TestHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
 		"no bounds":        func(s *analyticsv1.PeriodSnapshot) { s.Bounds = nil },
 		"coverage unset":   func(s *analyticsv1.PeriodSnapshot) { s.Bounds.Coverage = commonv1.Coverage_COVERAGE_UNSPECIFIED },
 		"no calculated_at": func(s *analyticsv1.PeriodSnapshot) { s.CalculatedAt = nil },
+		"no data_from":     func(s *analyticsv1.PeriodSnapshot) { s.Bounds.DataFrom = nil },
+		"no data_to":       func(s *analyticsv1.PeriodSnapshot) { s.Bounds.DataTo = nil },
 	}
 	for name, change := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -153,7 +155,7 @@ func TestHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
 func TestMappingRoundTrip(t *testing.T) {
 	for name, in := range map[string]*analyticsv1.PeriodSnapshot{
 		"every column and every kind of details": richSnapshot(),
-		"no metrics, gaps and data bounds":       snapshotWithoutDataBounds(),
+		"complete, no metrics and gaps":          completeSnapshotWithoutMetrics(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			h, err := headerOf(in)
@@ -189,15 +191,16 @@ func TestMappingRoundTrip(t *testing.T) {
 	}
 }
 
-// snapshotWithoutDataBounds has neither data_from nor data_to (both columns NULL), no gaps and no
-// metrics.
-func snapshotWithoutDataBounds() *analyticsv1.PeriodSnapshot {
+// completeSnapshotWithoutMetrics is a fully covered quarter without gaps and metrics: data_from
+// is the start of the period, data_to the end of its last day; unread_lines_count is zero.
+func completeSnapshotWithoutMetrics() *analyticsv1.PeriodSnapshot {
 	start, end := periodRange(quarter, "2026-Q3")
 	return &analyticsv1.PeriodSnapshot{
 		Period: commonv1.PeriodType_PERIOD_TYPE_QUARTER, PeriodKey: "2026-Q3", TransferMode: commonv1.TransferMode_TRANSFER_MODE_WITHOUT,
-		Range:        timeRange(start, end),
-		Bounds:       &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_COMPLETE},
-		CalculatedAt: at(time.Date(2026, 9, 25, 21, 52, 0, 0, msk)),
+		Range: timeRange(start, end),
+		Bounds: &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_COMPLETE,
+			DataFrom: at(start), DataTo: at(end.Add(-time.Second))},
+		CalculatedAt: at(time.Date(2026, 10, 1, 0, 5, 0, 0, msk)),
 	}
 }
 
@@ -242,6 +245,8 @@ func TestSnapshotOfRefusesBrokenHeader(t *testing.T) {
 		"range_start":        func(h *headerRow) { h.rangeStart = nil },
 		"range_end":          func(h *headerRow) { h.rangeEnd = nil },
 		"coverage":           func(h *headerRow) { h.coverage = nil },
+		"data_from":          func(h *headerRow) { h.dataFrom = nil },
+		"data_to":            func(h *headerRow) { h.dataTo = nil },
 		"unread_lines_count": func(h *headerRow) { h.unreadLines = nil },
 		"calculated_at":      func(h *headerRow) { h.calculatedAt = nil },
 	}
@@ -253,12 +258,6 @@ func TestSnapshotOfRefusesBrokenHeader(t *testing.T) {
 				t.Fatalf("error %v, want %v", err, errBrokenHeader)
 			}
 		})
-	}
-	// data_from and data_to may be empty: a period without covered days in its bounds.
-	h := valid()
-	h.dataFrom, h.dataTo = nil, nil
-	if s, err := snapshotOf(key, h, nil, nil, nil); err != nil || s.GetBounds().GetDataFrom() != nil {
-		t.Fatalf("header without data bounds: %v, %v", s, err)
 	}
 }
 

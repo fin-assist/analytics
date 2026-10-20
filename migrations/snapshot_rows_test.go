@@ -289,9 +289,12 @@ func enumOf[E ~int32](n *int16) E {
 func headerOf(s *analyticsv1.PeriodSnapshot) (headerRow, error) {
 	// The same rule as the read (snapshotOf): a snapshot header without its data is refused
 	// here, so a producer's error fails the request instead of leaving an unreadable period.
+	// A snapshot comes only for a period with covered days (grpc-api.md 7.3), so its data bounds
+	// are there too; NULL bounds belong to a removal marker.
 	if s.GetRange().GetStart() == nil || s.GetRange().GetEnd() == nil ||
-		s.GetBounds().GetCoverage() == commonv1.Coverage_COVERAGE_UNSPECIFIED || s.GetCalculatedAt() == nil {
-		return headerRow{}, fmt.Errorf("%w: snapshot %s without range, coverage or calculated_at", errBrokenHeader, s.GetPeriodKey())
+		s.GetBounds().GetCoverage() == commonv1.Coverage_COVERAGE_UNSPECIFIED ||
+		s.GetBounds().GetDataFrom() == nil || s.GetBounds().GetDataTo() == nil || s.GetCalculatedAt() == nil {
+		return headerRow{}, fmt.Errorf("%w: snapshot %s without range, coverage, data bounds or calculated_at", errBrokenHeader, s.GetPeriodKey())
 	}
 	coverage, err := enumColumn(s.GetBounds().GetCoverage())
 	if err != nil {
@@ -394,6 +397,8 @@ func snapshotOf(key periodKey, h headerRow, gapStarts, gapEnds []time.Time, metr
 		{"range_start", h.rangeStart == nil},
 		{"range_end", h.rangeEnd == nil},
 		{"coverage", h.coverage == nil},
+		{"data_from", h.dataFrom == nil},
+		{"data_to", h.dataTo == nil},
 		{"unread_lines_count", h.unreadLines == nil},
 		{"calculated_at", h.calculatedAt == nil},
 	} {

@@ -169,7 +169,7 @@ func snapshot(typ int16, key string, mode int16, version int64, metricIDs ...str
 		PeriodKey:        key,
 		TransferMode:     commonv1.TransferMode(mode),
 		Range:            &commonv1.TimeRange{Start: at(start), End: at(end)},
-		Bounds:           &commonv1.DataBounds{Coverage: commonv1.Coverage(partial), DataFrom: at(start)},
+		Bounds:           &commonv1.DataBounds{Coverage: commonv1.Coverage(partial), DataFrom: at(start), DataTo: at(start.Add(18 * time.Hour))},
 		UnreadLinesCount: int32(version),
 		CalculatedAt:     at(time.Date(2026, 9, 25, 21, 52, 0, 0, msk)),
 	}
@@ -966,14 +966,8 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		}
 	})
 
-	t.Run("a snapshot without metrics, gaps and data bounds", func(t *testing.T) {
-		start, end := periodRange(quarter, "2026-Q3")
-		in := &analyticsv1.PeriodSnapshot{
-			Period: commonv1.PeriodType_PERIOD_TYPE_QUARTER, PeriodKey: "2026-Q3", TransferMode: commonv1.TransferMode_TRANSFER_MODE_WITHOUT,
-			Range:        timeRange(start, end),
-			Bounds:       &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_COMPLETE},
-			CalculatedAt: at(time.Date(2026, 9, 25, 21, 52, 0, 0, msk)),
-		}
+	t.Run("a complete snapshot without metrics and gaps", func(t *testing.T) {
+		in := completeSnapshotWithoutMetrics()
 		if got := writeAndRead(t, db, newUser(2), in); !proto.Equal(got, in) {
 			t.Fatalf("snapshot came back as %v, want %v", got, in)
 		}
