@@ -243,19 +243,6 @@ func timestampOf(t *time.Time) *timestamppb.Timestamp {
 // being truncated into another value (docs/schema.md, «Инварианты в коде сервиса»).
 var errEnumRange = errors.New("enum number out of smallint range")
 
-// errVersionRange is a calc_version that does not fit the integer column. The contract field is
-// int64, the producer issues it from an integer sequence: a larger one is refused, not truncated
-// (docs/schema.md, «Инварианты в коде сервиса»).
-var errVersionRange = errors.New("calc_version out of integer range")
-
-// calcVersionOf is the column value of a calc_version, refusing what integer cannot hold.
-func calcVersionOf(v int64) (int32, error) {
-	if v < math.MinInt32 || v > math.MaxInt32 {
-		return 0, fmt.Errorf("%w: %d", errVersionRange, v)
-	}
-	return int32(v), nil
-}
-
 // errBrokenHeader is a header with removed = false and an empty data column.
 var errBrokenHeader = errors.New("snapshot header without its data")
 
@@ -488,13 +475,9 @@ type appliedRow struct {
 // headers and markers in one statement, then, for the applied keys only, the old gaps and
 // metrics removed and the new full set inserted. Run it in the request's transaction, after
 // the state.
-func upsertPeriods(ctx context.Context, q querier, user string, version int64,
+func upsertPeriods(ctx context.Context, q querier, user string, version int32,
 	snapshots []*analyticsv1.PeriodSnapshot, removed []*analyticsv1.PeriodRef,
 ) ([]appliedRow, error) {
-	column32, err := calcVersionOf(version)
-	if err != nil {
-		return nil, err
-	}
 	var headers []headerRow
 	for _, s := range snapshots {
 		h, err := headerOf(s)
@@ -506,7 +489,7 @@ func upsertPeriods(ctx context.Context, q querier, user string, version int64,
 	for _, r := range removed {
 		headers = append(headers, markersOf(r)...)
 	}
-	rows, err := q.Query(ctx, upsertHeadersSQL, user, column32,
+	rows, err := q.Query(ctx, upsertHeadersSQL, user, version,
 		column(headers, func(h headerRow) int16 { return h.typ }),
 		column(headers, func(h headerRow) string { return h.key }),
 		column(headers, func(h headerRow) int16 { return h.mode }),

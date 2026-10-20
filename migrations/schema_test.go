@@ -116,12 +116,8 @@ func validState() state {
 	}
 }
 
-func upsertState(ctx context.Context, q querier, user string, version int64, s state) (applied bool, err error) {
-	column32, err := calcVersionOf(version)
-	if err != nil {
-		return false, err
-	}
-	rows, err := q.Query(ctx, upsertStateSQL, user, column32, s.hasData, s.dataFrom, s.dataTo,
+func upsertState(ctx context.Context, q querier, user string, version int32, s state) (applied bool, err error) {
+	rows, err := q.Query(ctx, upsertStateSQL, user, version, s.hasData, s.dataFrom, s.dataTo,
 		s.lastOperation, s.stale, s.fullMonths, s.recalculating, s.timeZone, s.calculatedAt)
 	if err != nil {
 		return false, err
@@ -162,7 +158,7 @@ func periodRange(typ int16, key string) (time.Time, time.Time) {
 
 // snapshot builds a PeriodSnapshot whose content identifies the version that sent it:
 // unread_lines_count and the value of every metric are the version.
-func snapshot(typ int16, key string, mode int16, version int64, metricIDs ...string) *analyticsv1.PeriodSnapshot {
+func snapshot(typ int16, key string, mode int16, version int32, metricIDs ...string) *analyticsv1.PeriodSnapshot {
 	start, end := periodRange(typ, key)
 	s := &analyticsv1.PeriodSnapshot{
 		Period:           commonv1.PeriodType(typ),
@@ -170,12 +166,12 @@ func snapshot(typ int16, key string, mode int16, version int64, metricIDs ...str
 		TransferMode:     commonv1.TransferMode(mode),
 		Range:            &commonv1.TimeRange{Start: at(start), End: at(end)},
 		Bounds:           &commonv1.DataBounds{Coverage: commonv1.Coverage(partial), DataFrom: at(start), DataTo: at(start.Add(18 * time.Hour))},
-		UnreadLinesCount: int32(version),
+		UnreadLinesCount: version,
 		CalculatedAt:     at(time.Date(2026, 9, 25, 21, 52, 0, 0, msk)),
 	}
 	for _, id := range metricIDs {
 		s.Metrics = append(s.Metrics, &analyticsv1.MetricSnapshot{MetricId: id, DefinitionVersion: 1, Metric: &analyticsv1.Metric{
-			Status: analyticsv1.MetricStatus_METRIC_STATUS_READY, ValueMinor: proto.Int64(version),
+			Status: analyticsv1.MetricStatus_METRIC_STATUS_READY, ValueMinor: proto.Int64(int64(version)),
 		}})
 	}
 	return s
@@ -192,7 +188,7 @@ func withGaps(s *analyticsv1.PeriodSnapshot, n int) *analyticsv1.PeriodSnapshot 
 }
 
 // both returns the snapshots of a period in both transfer modes.
-func both(typ int16, key string, version int64, metricIDs ...string) []*analyticsv1.PeriodSnapshot {
+func both(typ int16, key string, version int32, metricIDs ...string) []*analyticsv1.PeriodSnapshot {
 	return []*analyticsv1.PeriodSnapshot{
 		snapshot(typ, key, withTransfers, version, metricIDs...),
 		snapshot(typ, key, withoutTransfers, version, metricIDs...),
@@ -209,7 +205,7 @@ func pk(typ int16, key string, mode int16) periodKey {
 
 // stored is what the tables hold for one key: the header and, by metric_id, the values.
 type stored struct {
-	version  int64
+	version  int32
 	removed  bool
 	unread   *int32
 	metrics  map[string]int64
@@ -260,11 +256,11 @@ func storedPeriod(t *testing.T, db *pgxpool.Pool, user string, k periodKey) (sto
 }
 
 // wantMetrics asserts the metric set of a key: every ID with the value of version.
-func wantMetrics(t *testing.T, s stored, version int64, ids ...string) {
+func wantMetrics(t *testing.T, s stored, version int32, ids ...string) {
 	t.Helper()
 	want := map[string]int64{}
 	for _, id := range ids {
-		want[id] = version
+		want[id] = int64(version)
 	}
 	if !maps.Equal(s.metrics, want) {
 		t.Fatalf("metrics %v, want %v", s.metrics, want)
@@ -312,7 +308,7 @@ func TestUserDataStateConstraints(t *testing.T) {
 
 	insert := func(column string, value any) error {
 		args := map[string]any{
-			"user_id": newUser(10), "calc_version": int64(1), "has_data": false, "full_months": int32(0),
+			"user_id": newUser(10), "calc_version": int32(1), "has_data": false, "full_months": int32(0),
 			"recalculating": false, "time_zone": "Europe/Moscow", "calculated_at": time.Now(),
 		}
 		args[column] = value
@@ -360,7 +356,7 @@ func TestPeriodTablesConstraints(t *testing.T) {
 		insert := func(column string) error {
 			args := map[string]any{
 				"user_id": user, "period_type": month, "period_key": "2026-10", "transfer_mode": withTransfers,
-				"calc_version": int64(1), "removed": true,
+				"calc_version": int32(1), "removed": true,
 			}
 			args[column] = nil
 			_, err := db.Exec(ctx, `INSERT INTO period_snapshot
@@ -488,7 +484,7 @@ func TestStateAppliesByVersion(t *testing.T) {
 	if ok, err := upsertState(ctx, db, user, 6, newer); err != nil || !ok {
 		t.Fatalf("newer state: applied %v, %v", ok, err)
 	}
-	var version int64
+	var version int32
 	var full int32
 	var recalculating bool
 	if err := db.QueryRow(ctx, `SELECT calc_version, full_months, recalculating FROM user_data_state WHERE user_id = $1`, user).
@@ -552,6 +548,43 @@ func TestPeriodsApplyByVersionPerKey(t *testing.T) {
 		t.Fatalf("mode with is v%d after a snapshot of mode without, want v5", s.version)
 	}
 	wantMetrics(t, s, 5, "tiles.expense")
+}
+
+// calc_version is int32 in the contract and integer in the schema: the largest version is
+// stored and compared as is, and the one below it is skipped as older.
+func TestLargestCalcVersionRoundTrips(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	user := newUser(1)
+	sep := pk(month, "2026-09", withTransfers)
+
+	if err := deliver(ctx, db, user, math.MaxInt32, true,
+		[]*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, math.MaxInt32, "tiles.expense")}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var version int32
+	if err := db.QueryRow(ctx, `SELECT calc_version FROM user_data_state WHERE user_id = $1`, user).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != math.MaxInt32 {
+		t.Fatalf("state is v%d, want v%d", version, int32(math.MaxInt32))
+	}
+	s, ok := storedPeriod(t, db, user, sep)
+	if !ok || s.version != math.MaxInt32 {
+		t.Fatalf("2026-09 is v%d (present %v), want v%d", s.version, ok, int32(math.MaxInt32))
+	}
+	wantMetrics(t, s, math.MaxInt32, "tiles.expense")
+
+	if ok, err := upsertState(ctx, db, user, math.MaxInt32-1, validState()); err != nil || ok {
+		t.Fatalf("older state: applied %v, %v; want skipped", ok, err)
+	}
+	applied, err := upsertPeriods(ctx, db, user, math.MaxInt32-1,
+		[]*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, math.MaxInt32-1, "tiles.income")}, nil)
+	if err != nil || len(applied) != 0 {
+		t.Fatalf("older snapshot: applied %v, %v; want skipped", applied, err)
+	}
+	s, _ = storedPeriod(t, db, user, sep)
+	wantMetrics(t, s, math.MaxInt32, "tiles.expense")
 }
 
 // The contract: a snapshot is the full set of metrics of its period; metrics absent from it are
@@ -672,7 +705,7 @@ func TestRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
 
 // One request: the state first, then the periods, in one transaction — the order the handler
 // is expected to use.
-func deliver(ctx context.Context, db *pgxpool.Pool, user string, version int64, withState bool,
+func deliver(ctx context.Context, db *pgxpool.Pool, user string, version int32, withState bool,
 	snapshots []*analyticsv1.PeriodSnapshot, removed []*analyticsv1.PeriodRef,
 ) error {
 	tx, err := db.Begin(ctx)
@@ -682,7 +715,7 @@ func deliver(ctx context.Context, db *pgxpool.Pool, user string, version int64, 
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	if withState {
 		s := validState()
-		s.fullMonths = int32(version)
+		s.fullMonths = version
 		if _, err := upsertState(ctx, tx, user, version, s); err != nil {
 			return fmt.Errorf("state v%d: %w", version, err)
 		}
@@ -695,7 +728,7 @@ func deliver(ctx context.Context, db *pgxpool.Pool, user string, version int64, 
 
 // metricsOfVersion is the metric set request v sends: it differs between versions, so a key
 // that kept metrics of another version, or both sets mixed, is caught.
-func metricsOfVersion(v int64) []string {
+func metricsOfVersion(v int32) []string {
 	ids := []string{"tiles.expense", fmt.Sprintf("tiles.v%d", v%3)}
 	if v%2 == 0 {
 		ids = append(ids, "insights.bank_fees")
@@ -717,12 +750,12 @@ func TestConcurrentDeliveryKeepsHighestVersion(t *testing.T) {
 	for round := range 15 {
 		user := newUser(1000 + round)
 		// What request v did: removed 2026-07 when v is divisible by 3, otherwise sent it.
-		removes := func(v int64) bool { return v%3 == 0 }
+		removes := func(v int32) bool { return v%3 == 0 }
 		start := make(chan struct{})
 		errs := make(chan error, writers)
 		var wg sync.WaitGroup
 		for _, v := range rand.Perm(writers) {
-			version := int64(v + 1)
+			version := int32(v + 1)
 			var snapshots []*analyticsv1.PeriodSnapshot
 			var removed []*analyticsv1.PeriodRef
 			for _, k := range keys {
@@ -769,7 +802,7 @@ func TestConcurrentDeliveryKeepsHighestVersion(t *testing.T) {
 				wantMetrics(t, s, writers, metricsOfVersion(writers)...)
 			}
 		}
-		var version int64
+		var version int32
 		if err := db.QueryRow(ctx, `SELECT calc_version FROM user_data_state WHERE user_id = $1`, user).Scan(&version); err != nil {
 			t.Fatal(err)
 		}
@@ -1070,23 +1103,6 @@ func TestMappingRefusesWhatItCannotStore(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("calc_version beyond integer", func(t *testing.T) {
-		err := deliver(ctx, db, user, math.MaxInt32+1, true, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 1, "tiles.expense")}, nil)
-		if !errors.Is(err, errVersionRange) {
-			t.Fatalf("error %v, want %v", err, errVersionRange)
-		}
-		var states int
-		if err := db.QueryRow(ctx, `SELECT count(*) FROM user_data_state WHERE user_id = $1`, user).Scan(&states); err != nil || states != 0 {
-			t.Fatalf("%d states, %v; want none written", states, err)
-		}
-		if _, ok := storedPeriod(t, db, user, sep); ok {
-			t.Fatal("the refused request wrote its header")
-		}
-		if _, err := upsertPeriods(ctx, db, user, math.MaxInt32+1, nil, []*analyticsv1.PeriodRef{ref(month, "2026-09")}); !errors.Is(err, errVersionRange) {
-			t.Fatalf("periods: %v, want %v", err, errVersionRange)
-		}
-	})
 
 	t.Run("a header without its data fails the read", func(t *testing.T) {
 		if err := deliver(ctx, db, user, 1, true, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 1, "tiles.expense")}, nil); err != nil {
