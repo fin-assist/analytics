@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
@@ -189,7 +190,7 @@ type headerRow struct {
 type gapRow struct {
 	periodKey
 	ordinal    int16
-	start, end time.Time
+	start, end *time.Time // NULL fails NOT NULL: a gap without a bound is not stored as the epoch
 }
 
 // metricRow is a row of period_metric.
@@ -237,13 +238,29 @@ func timestampOf(t *time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(*t)
 }
 
-// enumColumn maps an enum of the contract to its column: UNSPECIFIED is NULL, never 0.
-func enumColumn[E ~int32](e E) *int16 {
-	if e == 0 {
-		return nil
+// errEnumRange is an enum number that does not fit smallint. The number of a value this build
+// does not know (a newer producer) is stored as is; one beyond smallint is refused instead of
+// being truncated into another value (docs/schema.md, «Инварианты в коде сервиса»).
+var errEnumRange = errors.New("enum number out of smallint range")
+
+// smallintOf is the column value of an enum number, refusing what smallint cannot hold.
+func smallintOf[E ~int32](e E) (int16, error) {
+	if e < math.MinInt16 || e > math.MaxInt16 {
+		return 0, fmt.Errorf("%w: %d", errEnumRange, e)
 	}
-	n := int16(e)
-	return &n
+	return int16(e), nil
+}
+
+// enumColumn maps an optional enum of the contract to its column: UNSPECIFIED is NULL, never 0.
+func enumColumn[E ~int32](e E) (*int16, error) {
+	if e == 0 {
+		return nil, nil
+	}
+	n, err := smallintOf(e)
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
 }
 
 func enumOf[E ~int32](n *int16) E {
@@ -253,17 +270,21 @@ func enumOf[E ~int32](n *int16) E {
 	return E(*n)
 }
 
-func headerOf(s *analyticsv1.PeriodSnapshot) headerRow {
+func headerOf(s *analyticsv1.PeriodSnapshot) (headerRow, error) {
+	coverage, err := enumColumn(s.GetBounds().GetCoverage())
+	if err != nil {
+		return headerRow{}, fmt.Errorf("coverage of %s: %w", s.GetPeriodKey(), err)
+	}
 	return headerRow{
 		periodKey:    keyOf(s),
 		rangeStart:   timeOf(s.GetRange().GetStart()),
 		rangeEnd:     timeOf(s.GetRange().GetEnd()),
-		coverage:     enumColumn(s.GetBounds().GetCoverage()),
+		coverage:     coverage,
 		dataFrom:     timeOf(s.GetBounds().GetDataFrom()),
 		dataTo:       timeOf(s.GetBounds().GetDataTo()),
 		unreadLines:  ptr(s.GetUnreadLinesCount()),
 		calculatedAt: timeOf(s.GetCalculatedAt()),
-	}
+	}, nil
 }
 
 // markersOf returns the marker rows of removed_periods: both transfer modes.
@@ -274,28 +295,42 @@ func markersOf(r *analyticsv1.PeriodRef) []headerRow {
 	return []headerRow{{periodKey: with, removed: true}, {periodKey: without, removed: true}}
 }
 
-func gapsOf(s *analyticsv1.PeriodSnapshot) []gapRow {
+func gapsOf(s *analyticsv1.PeriodSnapshot) ([]gapRow, error) {
+	if len(s.GetBounds().GetGaps()) > math.MaxInt16+1 {
+		return nil, fmt.Errorf("gaps of %s: %d do not fit the smallint ordinal", s.GetPeriodKey(), len(s.GetBounds().GetGaps()))
+	}
 	gaps := make([]gapRow, 0, len(s.GetBounds().GetGaps()))
 	for i, g := range s.GetBounds().GetGaps() {
-		gaps = append(gaps, gapRow{periodKey: keyOf(s), ordinal: int16(i), start: g.GetStart().AsTime(), end: g.GetEnd().AsTime()})
+		gaps = append(gaps, gapRow{periodKey: keyOf(s), ordinal: int16(i), start: timeOf(g.GetStart()), end: timeOf(g.GetEnd())})
 	}
-	return gaps
+	return gaps, nil
 }
 
 func metricOf(key periodKey, ms *analyticsv1.MetricSnapshot) (metricRow, error) {
 	m := ms.GetMetric()
+	fail := func(field string, err error) (metricRow, error) {
+		return metricRow{}, fmt.Errorf("%s of %s: %w", field, ms.GetMetricId(), err)
+	}
+	status, err := smallintOf(m.GetStatus())
+	if err != nil {
+		return fail("status", err)
+	}
 	r := metricRow{
 		periodKey:         key,
 		metricID:          ms.GetMetricId(),
 		definitionVersion: ms.GetDefinitionVersion(),
-		status:            int16(m.GetStatus()),
+		status:            status,
 		valueMinor:        m.ValueMinor,
 		rangeStart:        timeOf(m.GetRange().GetStart()),
 		rangeEnd:          timeOf(m.GetRange().GetEnd()),
 	}
 	if l := m.GetLock(); l != nil {
 		// The text is not stored: analytics builds it when it assembles the answer.
-		r.lockReason = ptr(int16(l.GetReason()))
+		reason, err := smallintOf(l.GetReason())
+		if err != nil {
+			return fail("lock reason", err)
+		}
+		r.lockReason = &reason
 		r.lockRequired, r.lockAvailable = l.Required, l.Available
 		r.lockAvailableFrom = timeOf(l.GetAvailableFrom())
 	}
@@ -306,14 +341,18 @@ func metricOf(key periodKey, ms *analyticsv1.MetricSnapshot) (metricRow, error) 
 	if f := m.GetFilters(); f != nil {
 		r.filterFrom, r.filterTo = timeOf(f.GetFrom()), timeOf(f.GetTo())
 		r.filterCategoryID = f.CategoryId
-		r.filterKind = enumColumn(f.GetKind())
-		r.filterTransferMode = enumColumn(f.GetTransferMode())
+		if r.filterKind, err = enumColumn(f.GetKind()); err != nil {
+			return fail("filter kind", err)
+		}
+		if r.filterTransferMode, err = enumColumn(f.GetTransferMode()); err != nil {
+			return fail("filter transfer mode", err)
+		}
 		r.filterSelection, r.filterSelectionName = f.Selection, f.SelectionName
 	}
 	if m.GetDetails() != nil {
 		b, err := detailsMarshal.Marshal(&analyticsv1.Metric{Details: m.Details})
 		if err != nil {
-			return metricRow{}, fmt.Errorf("details of %s: %w", ms.GetMetricId(), err)
+			return fail("details", err)
 		}
 		r.details = b
 	}
@@ -323,6 +362,11 @@ func metricOf(key periodKey, ms *analyticsv1.MetricSnapshot) (metricRow, error) 
 // snapshotOf builds the PeriodSnapshot back from its header, gaps and metrics (metrics in
 // metric_id order).
 func snapshotOf(key periodKey, h headerRow, gapStarts, gapEnds []time.Time, metrics []metricRow) (*analyticsv1.PeriodSnapshot, error) {
+	// The schema does not tie removed = false to the data columns (no CHECK, decision of
+	// 19.10.2026): a header broken by hand is an error of the read, not a panic.
+	if h.unreadLines == nil {
+		return nil, fmt.Errorf("snapshot %v: unread_lines_count is NULL", key)
+	}
 	s := &analyticsv1.PeriodSnapshot{
 		Period:       commonv1.PeriodType(key.typ),
 		PeriodKey:    key.key,
@@ -410,7 +454,11 @@ func upsertPeriods(ctx context.Context, q querier, user string, version int64,
 ) ([]appliedRow, error) {
 	var headers []headerRow
 	for _, s := range snapshots {
-		headers = append(headers, headerOf(s))
+		h, err := headerOf(s)
+		if err != nil {
+			return nil, err
+		}
+		headers = append(headers, h)
 	}
 	for _, r := range removed {
 		headers = append(headers, markersOf(r)...)
@@ -456,7 +504,11 @@ func upsertPeriods(ctx context.Context, q querier, user string, version int64,
 		if !written[keyOf(s)] {
 			continue
 		}
-		gaps = append(gaps, gapsOf(s)...)
+		g, err := gapsOf(s)
+		if err != nil {
+			return nil, err
+		}
+		gaps = append(gaps, g...)
 		for _, ms := range s.GetMetrics() {
 			r, err := metricOf(keyOf(s), ms)
 			if err != nil {
@@ -471,8 +523,8 @@ func upsertPeriods(ctx context.Context, q querier, user string, version int64,
 			column(gaps, func(g gapRow) string { return g.key }),
 			column(gaps, func(g gapRow) int16 { return g.mode }),
 			column(gaps, func(g gapRow) int16 { return g.ordinal }),
-			column(gaps, func(g gapRow) time.Time { return g.start }),
-			column(gaps, func(g gapRow) time.Time { return g.end })); err != nil {
+			column(gaps, func(g gapRow) *time.Time { return g.start }),
+			column(gaps, func(g gapRow) *time.Time { return g.end })); err != nil {
 			return nil, fmt.Errorf("insert gaps: %w", err)
 		}
 	}

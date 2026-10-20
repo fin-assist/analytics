@@ -934,6 +934,31 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		if byID["tiles.expense"].GetDetails() != nil {
 			t.Fatal("a metric without details came back with details")
 		}
+
+		// Gaps come back in ordinal order, not in the physical order of their rows: rewrite them
+		// newest first and read again without the index, which would return them sorted anyway.
+		ctx := context.Background()
+		if _, err := db.Exec(ctx, `
+			WITH old AS (DELETE FROM period_gap WHERE user_id = $1 RETURNING *)
+			INSERT INTO period_gap SELECT * FROM old ORDER BY ordinal DESC`, newUser(1)); err != nil {
+			t.Fatal(err)
+		}
+		conn, err := db.Acquire(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Release()
+		if _, err := conn.Exec(ctx, `SET enable_indexscan = off; SET enable_bitmapscan = off`); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _, _ = conn.Exec(ctx, `RESET enable_indexscan; RESET enable_bitmapscan`) }()
+		again, err := readAnalytics(ctx, conn, newUser(1), keyOf(in))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !proto.Equal(again.snapshot.GetBounds(), in.GetBounds()) {
+			t.Fatalf("bounds after the gaps were rewritten in reverse: %v, want %v", again.snapshot.GetBounds(), in.GetBounds())
+		}
 	})
 
 	t.Run("a snapshot without metrics, gaps and data bounds", func(t *testing.T) {
@@ -1003,6 +1028,67 @@ func TestRoundTripDropsWhatIsNotStored(t *testing.T) {
 				t.Fatalf("categories %v, want the known part of the newer details", items)
 			}
 		}
+	}
+}
+
+// The mapping refuses what it cannot store as received instead of storing something else: an
+// enum number beyond smallint, a gap without a bound. Nothing of the request is written. And a
+// header broken by hand (removed = false without its data) fails the read instead of a panic.
+func TestMappingRefusesWhatItCannotStore(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	user := newUser(1)
+	sep := pk(month, "2026-09", withTransfers)
+
+	cases := []struct {
+		name   string
+		change func(s *analyticsv1.PeriodSnapshot)
+		check  func(t *testing.T, err error)
+	}{
+		{"status beyond smallint", func(s *analyticsv1.PeriodSnapshot) {
+			s.Metrics[0].Metric.Status = analyticsv1.MetricStatus(65537)
+		}, wantEnumRange},
+		{"lock reason beyond smallint", func(s *analyticsv1.PeriodSnapshot) {
+			s.Metrics[0].Metric.Lock = &analyticsv1.MetricLock{Reason: analyticsv1.LockReason(-40000)}
+		}, wantEnumRange},
+		{"filter kind beyond smallint", func(s *analyticsv1.PeriodSnapshot) {
+			s.Metrics[0].Metric.Filters = &commonv1.OperationsFilter{From: s.GetRange().GetStart(), To: s.GetRange().GetEnd(), Kind: commonv1.KindFilter(32768)}
+		}, wantEnumRange},
+		{"coverage beyond smallint", func(s *analyticsv1.PeriodSnapshot) {
+			s.Bounds.Coverage = commonv1.Coverage(1 << 20)
+		}, wantEnumRange},
+		{"gap without its end", func(s *analyticsv1.PeriodSnapshot) {
+			s.Bounds.Gaps[0].End = nil
+		}, func(t *testing.T, err error) { wantViolation(t, err, notNullViolation, "gap_end") }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := withGaps(snapshot(month, "2026-09", withTransfers, 1, "tiles.expense"), 1)
+			c.change(s)
+			c.check(t, deliver(ctx, db, user, 1, true, []*analyticsv1.PeriodSnapshot{s}, nil))
+			if _, ok := storedPeriod(t, db, user, sep); ok {
+				t.Fatal("the refused request wrote its header")
+			}
+		})
+	}
+
+	t.Run("a header without its data fails the read", func(t *testing.T) {
+		if err := deliver(ctx, db, user, 1, true, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 1, "tiles.expense")}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(ctx, `UPDATE period_snapshot SET unread_lines_count = NULL WHERE user_id = $1`, user); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readAnalytics(ctx, db, user, sep); err == nil {
+			t.Fatal("read of a header without unread_lines_count succeeded, want an error")
+		}
+	})
+}
+
+func wantEnumRange(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, errEnumRange) {
+		t.Fatalf("error %v, want %v", err, errEnumRange)
 	}
 }
 
