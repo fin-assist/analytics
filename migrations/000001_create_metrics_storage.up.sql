@@ -6,7 +6,9 @@
 -- squawk-ignore-file prefer-bigint-over-int, prefer-bigint-over-smallint
 -- Integers are sized by their range (Confluence «Архитектура» → «Идентификаторы»): enum numbers
 -- of the contract and the ordinal of a gap fit smallint; full_months, unread_lines_count,
--- definition_version and the month counts of a lock are int32 in the contract. The rule targets
+-- definition_version and the month counts of a lock are int32 in the contract; calc_version is
+-- integer as in bank-statement-data, which issues it (int64 in the contract: a larger one is
+-- refused by the service, owner's decision in the review of FIN-113). The rule targets
 -- counters and IDs, none of which are here; money is bigint (*_minor).
 --
 -- The schema keeps only PRIMARY KEY, UNIQUE, FOREIGN KEY, NOT NULL and DEFAULT, and no triggers or
@@ -22,7 +24,7 @@ CREATE TABLE user_data_state (
     user_id           uuid        NOT NULL,
     -- calc_version of the request that wrote this row; a request applies only when its
     -- calc_version >= this one.
-    calc_version      bigint      NOT NULL,
+    calc_version      integer     NOT NULL,
     has_data          boolean     NOT NULL,
     -- Covered days over all uploads, half-open: start of the first covered day and start of
     -- the day after the last one. Absent together: no covered days.
@@ -77,7 +79,7 @@ CREATE TABLE period_snapshot (
     period_key         text        COLLATE "C" NOT NULL,
     -- finassist.common.v1.TransferMode: 1 with transfers, 2 without.
     transfer_mode      smallint    NOT NULL,
-    calc_version       bigint      NOT NULL,
+    calc_version       integer     NOT NULL,
     -- true: a removal marker; the data columns below are NULL.
     removed            boolean     NOT NULL,
     -- PeriodSnapshot.range.

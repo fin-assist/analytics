@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"math"
 	"math/rand/v2"
 	"regexp"
 	"slices"
@@ -116,7 +117,11 @@ func validState() state {
 }
 
 func upsertState(ctx context.Context, q querier, user string, version int64, s state) (applied bool, err error) {
-	rows, err := q.Query(ctx, upsertStateSQL, user, version, s.hasData, s.dataFrom, s.dataTo,
+	column32, err := calcVersionOf(version)
+	if err != nil {
+		return false, err
+	}
+	rows, err := q.Query(ctx, upsertStateSQL, user, column32, s.hasData, s.dataFrom, s.dataTo,
 		s.lastOperation, s.stale, s.fullMonths, s.recalculating, s.timeZone, s.calculatedAt)
 	if err != nil {
 		return false, err
@@ -1071,6 +1076,23 @@ func TestMappingRefusesWhatItCannotStore(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("calc_version beyond integer", func(t *testing.T) {
+		err := deliver(ctx, db, user, math.MaxInt32+1, true, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 1, "tiles.expense")}, nil)
+		if !errors.Is(err, errVersionRange) {
+			t.Fatalf("error %v, want %v", err, errVersionRange)
+		}
+		var states int
+		if err := db.QueryRow(ctx, `SELECT count(*) FROM user_data_state WHERE user_id = $1`, user).Scan(&states); err != nil || states != 0 {
+			t.Fatalf("%d states, %v; want none written", states, err)
+		}
+		if _, ok := storedPeriod(t, db, user, sep); ok {
+			t.Fatal("the refused request wrote its header")
+		}
+		if _, err := upsertPeriods(ctx, db, user, math.MaxInt32+1, nil, []*analyticsv1.PeriodRef{ref(month, "2026-09")}); !errors.Is(err, errVersionRange) {
+			t.Fatalf("periods: %v, want %v", err, errVersionRange)
+		}
+	})
 
 	t.Run("a header without its data fails the read", func(t *testing.T) {
 		if err := deliver(ctx, db, user, 1, true, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 1, "tiles.expense")}, nil); err != nil {

@@ -40,6 +40,23 @@ func TestSmallintOf(t *testing.T) {
 	}
 }
 
+// calc_version is integer in the schema and int64 in the contract: the bounds of int32 map, one
+// beyond is refused.
+func TestCalcVersionOf(t *testing.T) {
+	for _, c := range []struct {
+		in  int64
+		err bool
+	}{
+		{math.MinInt32 - 1, true}, {math.MinInt32, false}, {1, false}, {math.MaxInt32, false},
+		{math.MaxInt32 + 1, true}, {math.MaxInt64, true},
+	} {
+		got, err := calcVersionOf(c.in)
+		if c.err != errors.Is(err, errVersionRange) || (!c.err && int64(got) != c.in) {
+			t.Errorf("calcVersionOf(%d) = %d, %v; want error %v", c.in, got, err, c.err)
+		}
+	}
+}
+
 func TestEnumColumn(t *testing.T) {
 	if got, err := enumColumn(commonv1.KindFilter_KIND_FILTER_UNSPECIFIED); got != nil || err != nil {
 		t.Fatalf("UNSPECIFIED: %v, %v; want NULL", got, err)
