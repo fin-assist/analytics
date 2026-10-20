@@ -39,7 +39,25 @@ CREATE TABLE user_data_state (
 );
 
 COMMENT ON TABLE user_data_state IS
-    'UserDataState from UpsertUserMetrics, one row per user, applied when calc_version >= stored (FIN-113)';
+    'Состояние данных пользователя (UserDataState) из UpsertUserMetrics, одна строка на пользователя. '
+    'Новое состояние применяется, только если его calc_version не меньше сохранённого (FIN-113).';
+COMMENT ON COLUMN user_data_state.user_id IS 'Идентификатор пользователя из сервиса user.';
+COMMENT ON COLUMN user_data_state.calc_version IS
+    'Версия расчёта запроса, который записал строку. Запрос применяется, если его calc_version не меньше этой.';
+COMMENT ON COLUMN user_data_state.has_data IS 'Есть ли у пользователя хоть одна операция и хоть один покрытый выпиской день.';
+COMMENT ON COLUMN user_data_state.data_from IS
+    'Начало первого покрытого дня по всем загрузкам. Нет вместе с data_to, если покрытых дней нет.';
+COMMENT ON COLUMN user_data_state.data_to IS
+    'Начало дня после последнего покрытого дня (полуинтервал). Нет вместе с data_from, если покрытых дней нет.';
+COMMENT ON COLUMN user_data_state.last_operation_at IS 'Время последней загруженной операции по всем загрузкам. Нет, если операций нет.';
+COMMENT ON COLUMN user_data_state.stale_after IS
+    'Момент, с которого данные устарели; считает bank-statement-data. Нет, если покрытых дней нет.';
+COMMENT ON COLUMN user_data_state.full_months IS 'Число полных календарных месяцев с данными по всем загрузкам.';
+COMMENT ON COLUMN user_data_state.recalculating IS 'Идёт пересчёт метрик пользователя (state.recalculating в api.md 6.1).';
+COMMENT ON COLUMN user_data_state.time_zone IS
+    'Часовой пояс профиля (IANA), в котором посчитаны периоды. Единственный пояс, который знает analytics.';
+COMMENT ON COLUMN user_data_state.calculated_at IS 'Когда bank-statement-data посчитал метрики.';
+COMMENT ON COLUMN user_data_state.applied_at IS 'Техническое: когда этот сервис последний раз применил строку.';
 
 -- Snapshots of periods (PeriodSnapshot): one row per (user, period type, period key, transfer mode).
 -- A removed period (removed_periods) keeps its rows with snapshot = NULL as a version marker,
@@ -69,4 +87,28 @@ CREATE TABLE period_snapshot (
 );
 
 COMMENT ON TABLE period_snapshot IS
-    'PeriodSnapshot from UpsertUserMetrics per (user, period, key, transfer mode), applied when calc_version >= stored; snapshot NULL = removed period kept as a version marker (FIN-113)';
+    'Снимки периодов (PeriodSnapshot) из UpsertUserMetrics: одна строка на пользователя, тип периода, ключ '
+    'периода и режим переводов. Снимок применяется, только если его calc_version не меньше сохранённого. '
+    'Удалённый период остаётся строкой с snapshot = NULL как отметка версии, чтобы опоздавший старый снимок '
+    'не вернул его (FIN-113).';
+COMMENT ON COLUMN period_snapshot.user_id IS 'Идентификатор пользователя из сервиса user.';
+COMMENT ON COLUMN period_snapshot.period_type IS
+    'Тип периода, номер finassist.common.v1.PeriodType: 1 — месяц, 2 — квартал, 3 — год.';
+COMMENT ON COLUMN period_snapshot.period_key IS
+    'Ключ периода как в контракте: 2026-09, 2026-Q3, 2026. В сортировке C порядок байтов совпадает '
+    'с календарным внутри типа, поэтому первичный ключ служит и навигации, и поиску последнего периода.';
+COMMENT ON COLUMN period_snapshot.transfer_mode IS
+    'Режим переводов, номер finassist.common.v1.TransferMode: 1 — с переводами, 2 — без переводов.';
+COMMENT ON COLUMN period_snapshot.calc_version IS
+    'Версия расчёта запроса, который записал строку. Снимок применяется, если его calc_version не меньше этой.';
+COMMENT ON COLUMN period_snapshot.range_start IS
+    'Начало периода — копия границы из снимка для SQL (ListPeriods). Нет у отметки удалённого периода.';
+COMMENT ON COLUMN period_snapshot.range_end IS
+    'Конец периода, не включая, — копия границы из снимка для SQL. Нет у отметки удалённого периода.';
+COMMENT ON COLUMN period_snapshot.coverage IS
+    'Покрытие периода, номер finassist.common.v1.Coverage: 1 — полный, 2 — частичный. Нет у отметки '
+    'удалённого периода.';
+COMMENT ON COLUMN period_snapshot.snapshot IS
+    'Сообщение PeriodSnapshot как получено (protobuf): границы, непрочитанные строки, calculated_at и все '
+    'MetricSnapshot с их definition_version. Неизвестные поля и metric_id сохраняются как есть. NULL — период удалён.';
+COMMENT ON COLUMN period_snapshot.applied_at IS 'Техническое: когда этот сервис последний раз применил строку.';

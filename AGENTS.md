@@ -118,6 +118,8 @@ Priorities when they pull apart, in this order:
 
 - Code, comments, identifiers, commit messages — English. `docs/*.md`, `README.md`, PR title and description —
   Russian. Comments where the logic is not obvious; a doc comment on every exported identifier.
+  Exception: `COMMENT ON TABLE` and `COMMENT ON COLUMN` in migrations are Russian, one for every table and
+  column (owner's request, FIN-113; `docs/migrations.md`, «Описания таблиц и столбцов»).
 - Layers: `domain` ← `<feature>` ← adapters ← `cmd`. A usecase declares the interface it needs (consumer side) and
   never imports an adapter, pgx or gRPC; a handler converts messages and calls a usecase; `wire()` connects them.
 - Errors to callers: only `finerr` constructors (`finerr.NotFound()`, `finerr.LimitExceeded(resetsAt)`).
