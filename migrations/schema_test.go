@@ -1079,8 +1079,14 @@ func TestMappingRefusesWhatItCannotStore(t *testing.T) {
 		if _, err := db.Exec(ctx, `UPDATE period_snapshot SET unread_lines_count = NULL WHERE user_id = $1`, user); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := readAnalytics(ctx, db, user, sep); err == nil {
-			t.Fatal("read of a header without unread_lines_count succeeded, want an error")
+		if _, err := readAnalytics(ctx, db, user, sep); !errors.Is(err, errBrokenHeader) {
+			t.Fatalf("read of a header without unread_lines_count: %v, want %v", err, errBrokenHeader)
+		}
+		if _, err := db.Exec(ctx, `UPDATE period_snapshot SET unread_lines_count = 1, calculated_at = NULL WHERE user_id = $1`, user); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readAnalytics(ctx, db, user, sep); !errors.Is(err, errBrokenHeader) {
+			t.Fatalf("read of a header without calculated_at: %v, want %v", err, errBrokenHeader)
 		}
 	})
 }

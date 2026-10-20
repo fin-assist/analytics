@@ -243,6 +243,9 @@ func timestampOf(t *time.Time) *timestamppb.Timestamp {
 // being truncated into another value (docs/schema.md, «Инварианты в коде сервиса»).
 var errEnumRange = errors.New("enum number out of smallint range")
 
+// errBrokenHeader is a header with removed = false and an empty data column.
+var errBrokenHeader = errors.New("snapshot header without its data")
+
 // smallintOf is the column value of an enum number, refusing what smallint cannot hold.
 func smallintOf[E ~int32](e E) (int16, error) {
 	if e < math.MinInt16 || e > math.MaxInt16 {
@@ -363,9 +366,21 @@ func metricOf(key periodKey, ms *analyticsv1.MetricSnapshot) (metricRow, error) 
 // metric_id order).
 func snapshotOf(key periodKey, h headerRow, gapStarts, gapEnds []time.Time, metrics []metricRow) (*analyticsv1.PeriodSnapshot, error) {
 	// The schema does not tie removed = false to the data columns (no CHECK, decision of
-	// 19.10.2026): a header broken by hand is an error of the read, not a panic.
-	if h.unreadLines == nil {
-		return nil, fmt.Errorf("snapshot %v: unread_lines_count is NULL", key)
+	// 19.10.2026): a header broken by hand is an error of the read, not a panic or a snapshot
+	// with silently empty fields.
+	for _, c := range []struct {
+		column  string
+		missing bool
+	}{
+		{"range_start", h.rangeStart == nil},
+		{"range_end", h.rangeEnd == nil},
+		{"coverage", h.coverage == nil},
+		{"unread_lines_count", h.unreadLines == nil},
+		{"calculated_at", h.calculatedAt == nil},
+	} {
+		if c.missing {
+			return nil, fmt.Errorf("%w: snapshot %v: %s is NULL", errBrokenHeader, key, c.column)
+		}
 	}
 	s := &analyticsv1.PeriodSnapshot{
 		Period:       commonv1.PeriodType(key.typ),
