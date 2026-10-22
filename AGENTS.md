@@ -136,7 +136,8 @@ Priorities when they pull apart, in this order:
   Migrations follow `docs/migrations.md` (two releases for an incompatible change, `CONCURRENTLY` alone in a file).
   The schema holds only primary keys, unique constraints and indexes (partial ones included), foreign keys with
   their cascades, `NOT NULL` and `DEFAULT`: no `CHECK`, `EXCLUDE`, triggers or stored functions (owner's decision
-  of 19.10.2026, FIN-194; Confluence «Архитектура» → «Миграции и доступ к БД» → «Что можно в схеме БД»). Value
+  of 19.10.2026, FIN-194; `docs/migrations.md`, «Что можно в схеме»; Confluence «Архитектура» → «Миграции и
+  доступ к БД» → «Что можно в схеме БД»). Value
   and state rules live in the service code; `docs/schema.md`, «Инварианты в коде сервиса», lists them, and a new
   rule adds its row there with its test.
 - Clients of other services: `client.Dial` with `Retry` listing only reads and methods idempotent by construction;
