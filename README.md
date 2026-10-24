@@ -32,7 +32,7 @@ internal/domain/                   entities and invariants, no infrastructure im
 internal/<feature>/                usecases; interfaces of repositories and clients they need
 internal/adapter/grpc/server/      gRPC server, interceptors, access table types, identity interfaces
 internal/adapter/grpc/<feature>/   gRPC handlers: messages <-> usecases
-internal/adapter/postgres/         pools, transaction manager, repositories on pgx
+internal/adapter/postgres/         pools, go-postgres adapter, repositories on pgx
 internal/adapter/postgres/migrate/ migration runner (migratetest: PostgreSQL for tests)
 internal/adapter/client/           clients of other services, service token source
 internal/worker/                   background jobs: outbox dispatcher, scheduled jobs
@@ -60,6 +60,8 @@ make run
 - **k3s** — манифесты в `fin-assist/infra` (FIN-147): ServiceAccount, projected token, headless Service, пробы `grpc`.
 
 ## Библиотеки и обновления
+
+Транзакциями управляет [`go-postgres v0.1.1`](https://github.com/fin-assist/go-postgres) ([FIN-240](https://finassist.youtrack.cloud/issue/FIN-240)); `postgres.DB` сохраняет настройку пулов и прежний выбор primary/replica. `RunMapped` принимает обработчик конкретной операции из адаптера сервиса, включая отложенные ошибки COMMIT. Прикладные RPC analytics пока не зарегистрированы: production mappings и новые контрактные ошибки не добавлены. Правила — [docs/migrations.md](docs/migrations.md), «Нарушения ограничений и транзакции».
 
 Общий код сервисов — отдельные Go-библиотеки из шаблона [`fin-assist/go-library-template`](https://github.com/fin-assist/go-library-template) ([FIN-118](https://finassist.youtrack.cloud/issue/FIN-118)): [`go-identity`](https://github.com/fin-assist/go-identity) (FIN-119), [`go-idempotency`](https://github.com/fin-assist/go-idempotency) (FIN-78), [`go-outbox`](https://github.com/fin-assist/go-outbox) (FIN-109), [`go-tombstone`](https://github.com/fin-assist/go-tombstone) (FIN-110).
 

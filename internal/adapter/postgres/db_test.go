@@ -3,8 +3,11 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	pgstore "github.com/fin-assist/go-postgres"
 
 	"github.com/fin-assist/analytics/internal/adapter/postgres"
 	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate/migratetest"
@@ -136,5 +139,31 @@ func TestOpenDoesNotLeakDSN(t *testing.T) {
 	_, err := postgres.Open(context.Background(), postgres.Options{PrimaryDSN: "postgres://u:secret@%zz/db"})
 	if err == nil || strings.Contains(err.Error(), "secret") {
 		t.Fatalf("error %v must not contain the password", err)
+	}
+}
+
+func TestIntegrationForeignTransactionDoesNotWriteOutsideItsOwner(t *testing.T) {
+	owner, foreign := open(t), open(t)
+	err := owner.Run(t.Context(), func(ctx context.Context) error {
+		for name, q := range map[string]postgres.Querier{"Writer": foreign.Writer(ctx), "Reader": foreign.Reader(ctx)} {
+			if _, err := q.Exec(ctx, `INSERT INTO item VALUES (9)`); !errors.Is(err, pgstore.ErrForeignTransaction) {
+				return fmt.Errorf("%s: %w, want foreign transaction refusal", name, err)
+			}
+		}
+		called := false
+		err := foreign.Run(ctx, func(context.Context) error { called = true; return nil })
+		if !errors.Is(err, pgstore.ErrForeignTransaction) || called {
+			return fmt.Errorf("foreign Run: %w, callback called=%v", err, called)
+		}
+		if _, ok := foreign.Tx(ctx); ok {
+			return errors.New("foreign DB claims the owner's transaction")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count(t, owner) != 0 || count(t, foreign) != 0 {
+		t.Fatal("foreign-context query persisted a write")
 	}
 }

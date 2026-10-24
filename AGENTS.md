@@ -23,8 +23,9 @@ updates them in the same PR. A service made from the template rewrites the first
   never defines its own `.proto`, error codes or REST fields: a change goes to `contracts` first (its own FIN issue
   and PR), then the service bumps the module.
 - Shared code: Go libraries made from `fin-assist/go-library-template` (FIN-118) — `go-identity`, `go-idempotency`,
-  `go-outbox`, `go-tombstone`. The service imports them at tagged versions and wires them in `internal/app` by the
-  «Внедрение» section of their README; versions and compatibility — `docs/releasing.md` of the library template.
+  `go-outbox`, `go-tombstone`, `go-postgres` (FIN-240, v0.1.1). The service imports them at tagged versions and wires
+  them in `internal/app` by the «Внедрение» section of their README; versions and compatibility — `docs/releasing.md`
+  of the library template.
   Code that more than one service needs goes into a library (its own FIN issue), not into a copy here.
 - Architecture, MVP scope, product decisions: Confluence PF (https://finassist.atlassian.net/wiki/spaces/PF),
   «Архитектура» (including «Миграции и доступ к БД» and «Репозитории и структура кода»). When the docs here and the
@@ -141,6 +142,10 @@ Priorities when they pull apart, in this order:
   builder, explain the limitation beside its manual construction and preserve parameterization.
 - Database: SQL with parameters only (`$1`), table and column names are constants. A usecase opens the transaction
   with `db.Run`; repositories take `db.Writer(ctx)` / `db.Reader(ctx)`; no calls to other services inside `Run`.
+  `DB` delegates transactions to one `go-postgres` Manager per primary pool. Operation-specific constraint-to-domain
+  mapping stays in PostgreSQL adapters through outer `RunMapped`; nested calls use `Run`. Foreign transaction
+  contexts are rejected by the manager and by Writer/Reader, never silently sent to a pool. No production mappings
+  or business RPCs are invented for the current analytics scaffold.
   Migrations follow `docs/migrations.md` (two releases for an incompatible change, `CONCURRENTLY` alone in a file).
   The schema holds only primary keys, unique constraints and indexes (partial ones included), foreign keys with
   their cascades, `NOT NULL` and `DEFAULT`: no `CHECK`, `EXCLUDE`, triggers or stored functions (owner's decision

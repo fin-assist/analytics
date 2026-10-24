@@ -16,6 +16,8 @@ import (
 	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	userv1 "github.com/fin-assist/contracts/gen/go/finassist/user/v1"
 	"github.com/fin-assist/contracts/gen/go/finerr"
+	pgstore "github.com/fin-assist/go-postgres"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -335,6 +337,10 @@ var normalizeCases = []struct {
 	details []string
 }{
 	{"plain error", errors.New(secretText), codes.Internal, "", nil},
+	{"unmapped commit constraint", fmt.Errorf("commit: %w", &pgconn.PgError{
+		Code: "23503", Message: "violates user_secret_fk", ConstraintName: "user_secret_fk", Detail: "user_secret key=987654"}), codes.Internal, "", nil},
+	{"foreign transaction", fmt.Errorf("%s: %w", secretText, pgstore.ErrForeignTransaction), codes.Internal, "", nil},
+	{"nested mapper", fmt.Errorf("%s: %w", secretText, pgstore.ErrNestedMapper), codes.Internal, "", nil},
 	{"wrapped registry error", fmt.Errorf("load %s: %w", secretText, finerr.NotFound()), codes.NotFound, "NOT_FOUND", nil},
 	{"wrapped validation error", fmt.Errorf("check %s: %w", secretText,
 		finerr.ValidationError(&errdetails.BadRequest_FieldViolation{Field: "phone", Reason: "INVALID_FORMAT"})),
@@ -422,6 +428,9 @@ func TestHandlerErrorsAreNormalized(t *testing.T) {
 				}
 				if strings.Contains(st.Message(), "user_secret") {
 					t.Fatalf("the handler's text reached the caller: %q", st.Message())
+				}
+				if tc.reason == "" && len(st.Details()) != 0 {
+					t.Fatalf("internal failure leaked details: %v", st.Details())
 				}
 				for _, want := range tc.details {
 					if !slices.Contains(detailNames(err), want) {
