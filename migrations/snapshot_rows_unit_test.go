@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestSmallintOf(t *testing.T) {
+func TestUnitSmallintOf(t *testing.T) {
 	cases := []struct {
 		in   int32
 		want int16
@@ -40,7 +40,7 @@ func TestSmallintOf(t *testing.T) {
 	}
 }
 
-func TestEnumColumn(t *testing.T) {
+func TestUnitEnumColumn(t *testing.T) {
 	if got, err := enumColumn(commonv1.KindFilter_KIND_FILTER_UNSPECIFIED); got != nil || err != nil {
 		t.Fatalf("UNSPECIFIED: %v, %v; want NULL", got, err)
 	}
@@ -56,7 +56,7 @@ func TestEnumColumn(t *testing.T) {
 }
 
 // metricOf refuses every enum column out of range and names the metric; a valid metric maps.
-func TestMetricOfRefusesEnumsOutOfRange(t *testing.T) {
+func TestUnitMetricOfRefusesEnumsOutOfRange(t *testing.T) {
 	start, end := periodRange(month, "2026-09")
 	filter := func() *commonv1.OperationsFilter {
 		return &commonv1.OperationsFilter{From: at(start), To: at(end)}
@@ -97,7 +97,7 @@ func TestMetricOfRefusesEnumsOutOfRange(t *testing.T) {
 	}
 }
 
-func TestHeaderOfRefusesCoverageOutOfRange(t *testing.T) {
+func TestUnitHeaderOfRefusesCoverageOutOfRange(t *testing.T) {
 	s := snapshot(month, "2026-09", withTransfers, 1)
 	s.Bounds.Coverage = commonv1.Coverage(math.MaxInt16 + 1)
 	if _, err := headerOf(s); !errors.Is(err, errEnumRange) {
@@ -111,7 +111,7 @@ func TestHeaderOfRefusesCoverageOutOfRange(t *testing.T) {
 }
 
 // A snapshot header without its data is refused on write as on read.
-func TestHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
+func TestUnitHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
 	cases := map[string]func(s *analyticsv1.PeriodSnapshot){
 		"no range":         func(s *analyticsv1.PeriodSnapshot) { s.Range = nil },
 		"no range end":     func(s *analyticsv1.PeriodSnapshot) { s.Range.End = nil },
@@ -134,8 +134,8 @@ func TestHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
 
 // The mapping alone, without PostgreSQL: PeriodSnapshot → header, gap and metric rows →
 // PeriodSnapshot is the same message, for every column and every kind of details. The same
-// snapshot goes through the tables in TestSnapshotRoundTrip.
-func TestMappingRoundTrip(t *testing.T) {
+// snapshot goes through the tables in TestIntegrationSnapshotRoundTrip.
+func TestUnitMappingRoundTrip(t *testing.T) {
 	for name, in := range map[string]*analyticsv1.PeriodSnapshot{
 		"every column and every kind of details": richSnapshot(),
 		"complete, no metrics and gaps":          completeSnapshotWithoutMetrics(),
@@ -189,7 +189,7 @@ func completeSnapshotWithoutMetrics() *analyticsv1.PeriodSnapshot {
 
 // The ordinal is smallint: 32768 gaps (ordinals 0…32767) map, one more is refused. A gap
 // without a bound maps to NULL, which NOT NULL refuses, never to the epoch.
-func TestGapsOf(t *testing.T) {
+func TestUnitGapsOf(t *testing.T) {
 	s := snapshot(month, "2026-09", withTransfers, 1)
 	day := timeRange(time.Date(2026, 9, 3, 0, 0, 0, 0, msk), time.Date(2026, 9, 4, 0, 0, 0, 0, msk))
 	for range math.MaxInt16 + 1 {
@@ -212,7 +212,7 @@ func TestGapsOf(t *testing.T) {
 }
 
 // A header with removed = false must carry its data: any empty data column fails the read.
-func TestSnapshotOfRefusesBrokenHeader(t *testing.T) {
+func TestUnitSnapshotOfRefusesBrokenHeader(t *testing.T) {
 	key := pk(month, "2026-09", withTransfers)
 	valid := func() headerRow {
 		h, err := headerOf(snapshot(month, "2026-09", withTransfers, 1))
@@ -245,7 +245,7 @@ func TestSnapshotOfRefusesBrokenHeader(t *testing.T) {
 }
 
 // Details that are not protojson of a Metric fail the read with the metric named.
-func TestSnapshotOfRefusesBrokenDetails(t *testing.T) {
+func TestUnitSnapshotOfRefusesBrokenDetails(t *testing.T) {
 	h, err := headerOf(snapshot(month, "2026-09", withTransfers, 1))
 	if err != nil {
 		t.Fatal(err)

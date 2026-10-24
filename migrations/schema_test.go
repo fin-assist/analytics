@@ -288,7 +288,7 @@ const notNullViolation, uniqueViolation, foreignKeyViolation = "23502", "23505",
 
 // The schema keeps only keys and NOT NULL (docs/schema.md, «Инварианты в коде сервиса»):
 // every shape of a valid state is accepted, required columns are required.
-func TestUserDataStateConstraints(t *testing.T) {
+func TestIntegrationUserDataStateConstraints(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 
@@ -338,7 +338,7 @@ func TestUserDataStateConstraints(t *testing.T) {
 
 // The period tables keep keys, NOT NULL and the cascades of their foreign keys; every other rule
 // is the code's (docs/schema.md, «Инварианты в коде сервиса»).
-func TestPeriodTablesConstraints(t *testing.T) {
+func TestIntegrationPeriodTablesConstraints(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -459,7 +459,7 @@ func TestPeriodTablesConstraints(t *testing.T) {
 	}
 }
 
-func TestStateAppliesByVersion(t *testing.T) {
+func TestIntegrationStateAppliesByVersion(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -496,7 +496,7 @@ func TestStateAppliesByVersion(t *testing.T) {
 	}
 }
 
-func TestPeriodsApplyByVersionPerKey(t *testing.T) {
+func TestIntegrationPeriodsApplyByVersionPerKey(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -552,7 +552,7 @@ func TestPeriodsApplyByVersionPerKey(t *testing.T) {
 
 // calc_version is int32 in the contract and integer in the schema: the largest version is
 // stored and compared as is, and the one below it is skipped as older.
-func TestLargestCalcVersionRoundTrips(t *testing.T) {
+func TestIntegrationLargestCalcVersionRoundTrips(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -589,7 +589,7 @@ func TestLargestCalcVersionRoundTrips(t *testing.T) {
 
 // The contract: a snapshot is the full set of metrics of its period; metrics absent from it are
 // removed. Gaps are replaced the same way. A skipped (older) snapshot touches neither.
-func TestSnapshotReplacesMetricsAndGaps(t *testing.T) {
+func TestIntegrationSnapshotReplacesMetricsAndGaps(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user, other := newUser(1), newUser(2)
@@ -643,7 +643,7 @@ func TestSnapshotReplacesMetricsAndGaps(t *testing.T) {
 	}
 }
 
-func TestRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
+func TestIntegrationRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -741,7 +741,7 @@ func metricsOfVersion(v int32) []string {
 // some removing a period the others send, each with its own set of metrics and gaps.
 // Whatever the interleaving: no deadlock, no error, and every key ends at the highest version
 // with exactly that version's metrics and gaps.
-func TestConcurrentDeliveryKeepsHighestVersion(t *testing.T) {
+func TestIntegrationConcurrentDeliveryKeepsHighestVersion(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	keys := []string{"2026-05", "2026-06", "2026-07", "2026-08", "2026-09"}
@@ -942,7 +942,7 @@ func writeAndRead(t *testing.T, db *pgxpool.Pool, user string, s *analyticsv1.Pe
 
 // A snapshot written to the normalised rows and read back is the same PeriodSnapshot: every
 // column, every kind of details, gaps in order, presence of optional fields.
-func TestSnapshotRoundTrip(t *testing.T) {
+func TestIntegrationSnapshotRoundTrip(t *testing.T) {
 	db := openDB(t)
 
 	t.Run("every column and every kind of details", func(t *testing.T) {
@@ -1010,7 +1010,7 @@ func TestSnapshotRoundTrip(t *testing.T) {
 // What the normalised storage does not keep, by design (docs/schema.md, «Альтернативы»): the
 // lock text (analytics builds it), unknown protobuf fields, nanoseconds of a moment. And what it
 // tolerates: details written by a newer release with keys this build does not know.
-func TestRoundTripDropsWhatIsNotStored(t *testing.T) {
+func TestIntegrationRoundTripDropsWhatIsNotStored(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 
@@ -1066,7 +1066,7 @@ func TestRoundTripDropsWhatIsNotStored(t *testing.T) {
 // The mapping refuses what it cannot store as received instead of storing something else: an
 // enum number beyond smallint, a gap without a bound. Nothing of the request is written. And a
 // header broken by hand (removed = false without its data) fails the read instead of a panic.
-func TestMappingRefusesWhatItCannotStore(t *testing.T) {
+func TestIntegrationMappingRefusesWhatItCannotStore(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -1152,7 +1152,7 @@ func seedForReads(t *testing.T, db *pgxpool.Pool, user string) {
 	}
 }
 
-func TestReadQueries(t *testing.T) {
+func TestIntegrationReadQueries(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user, other := newUser(1), newUser(2)
@@ -1271,7 +1271,7 @@ func TestReadQueries(t *testing.T) {
 // COLLATE "C" is calendar order; the year boundary is where a wrong order would show first.
 // Keys of that grammar sort the same in any sane collation, so the collation of the key columns
 // is asserted from the catalog: the order of the index must not depend on the database locale.
-func TestReadQueriesAcrossYearBoundary(t *testing.T) {
+func TestIntegrationReadQueriesAcrossYearBoundary(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
@@ -1381,7 +1381,7 @@ func deref(s *string) string {
 // pushed off sequential scans because the test tables are tiny; what is checked is that an index
 // path exists. The cascade of PurgeUserData runs, per header, the delete of its gaps and metrics
 // by the full snapshot key; those statements stand in for it.
-func TestQueriesUsePrimaryKey(t *testing.T) {
+func TestIntegrationQueriesUsePrimaryKey(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	for i := range 3 {
@@ -1478,7 +1478,7 @@ func TestQueriesUsePrimaryKey(t *testing.T) {
 // Every table of the schema and every column of it carries a description in Russian
 // (COMMENT ON TABLE, COMMENT ON COLUMN, owner's request in the review of FIN-113), so a table
 // or a column added later without one fails here. schema_migrations belongs to golang-migrate.
-func TestEveryTableAndColumnHasDescription(t *testing.T) {
+func TestIntegrationEveryTableAndColumnHasDescription(t *testing.T) {
 	db := openDB(t)
 	// One row per table (column NULL) and per column of it.
 	rows, err := db.Query(context.Background(), `
