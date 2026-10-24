@@ -1,5 +1,7 @@
 # analytics
 
+Выпуск версии сервиса и повторная публикация GitHub Release описаны в [docs/releasing.md](docs/releasing.md). История изменений — [CHANGELOG.md](CHANGELOG.md). История начинается с пустого `Unreleased`; версии и теги создаёт владелец после PR и post-merge CI. Публикация образа и deployment — отдельные этапы.
+
 Сервис `analytics` «Понятные финансы»: хранит готовые персональные метрики, которые присылает `bank-statement-data` (`MetricsIngestService.UpsertUserMetrics`), и собирает из них экран «Аналитика» (`AnalyticsService.GetAnalytics`, `ListPeriods`; REST 6.1, 6.2). Сам метрики не считает. Контракт — [`fin-assist/contracts`](https://github.com/fin-assist/contracts): `docs/grpc-api.md` (7.3), `proto/finassist/analytics/v1/analytics.proto`, `docs/api.md` (6.1, 6.2, «Блоки»); модуль `github.com/fin-assist/contracts/gen/go`.
 
 Создан из шаблона [`fin-assist/go-service-template`](https://github.com/fin-assist/go-service-template) ([FIN-117](https://finassist.youtrack.cloud/issue/FIN-117), перенос — [FIN-192](https://finassist.youtrack.cloud/issue/FIN-192)).
