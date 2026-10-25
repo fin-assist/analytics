@@ -6,6 +6,7 @@ import (
 
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
 	commonv1 "github.com/fin-assist/contracts/gen/go/finassist/common/v1"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -49,12 +50,27 @@ func rangeOf(r *commonv1.TimeRange) (*domain.TimeRange, error) {
 	return &domain.TimeRange{Start: start, End: end}, nil
 }
 
+// canonicalUserID turns a valid UUID of either case into its canonical lower-case form, the
+// form of the tombstone lock and of every comparison of the service: two calls for one user in
+// different cases must serialize on one guard and match one sub. Anything else is returned as is
+// and refused by validation.
+func canonicalUserID(id string) string {
+	if !domain.ValidUserID(id) {
+		return id
+	}
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return id
+	}
+	return parsed.String()
+}
+
 // upsertOf converts UpsertUserMetricsRequest into the domain batch. It refuses only what
 // the domain cannot represent — a MetricSnapshot without its Metric, a filter with q or
 // amounts (no columns for them, they would be lost silently), an invalid timestamp; the
 // rules of the values are domain.Upsert.Validate.
 func upsertOf(req *analyticsv1.UpsertUserMetricsRequest) (domain.Upsert, error) {
-	u := domain.Upsert{UserID: req.GetUserId(), Version: req.GetCalcVersion()}
+	u := domain.Upsert{UserID: canonicalUserID(req.GetUserId()), Version: req.GetCalcVersion()}
 	if req.State != nil {
 		s, err := stateOf(req.GetState())
 		if err != nil {

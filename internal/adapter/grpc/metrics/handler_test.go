@@ -318,3 +318,35 @@ func TestUnitRefusedRuleIsBoundedInTheLog(t *testing.T) {
 		t.Fatalf("bounded %d bytes, valid %v", len(got), utf8.ValidString(got))
 	}
 }
+
+func TestUnitUserIDIsCanonicalizedAtTheBoundary(t *testing.T) {
+	upper := strings.ToUpper(user)
+	for in, want := range map[string]string{
+		upper: user, user: user, "01a107db-AE80-7b07-b8a1-000000000001": user,
+		// Not the canonical grammar: left as is for validation to refuse.
+		"{" + user + "}": "{" + user + "}", strings.ReplaceAll(user, "-", ""): strings.ReplaceAll(user, "-", ""), "u1": "u1", "": "",
+	} {
+		if got := canonicalUserID(in); got != want {
+			t.Errorf("canonicalUserID(%q) = %q, want %q", in, got, want)
+		}
+	}
+	r := request()
+	r.UserId = upper
+	u, err := upsertOf(r)
+	if err != nil || u.UserID != user {
+		t.Fatalf("batch user %q, %v; want %q", u.UserID, err, user)
+	}
+	// ListPeriods: a request user_id in another case is the same user; the sub is canonical too.
+	asUpper := reqctx.WithUserID(t.Context(), upper)
+	for _, requested := range []*string{nil, proto.String(""), proto.String(user), proto.String(upper)} {
+		if got, ok := subject(asUpper, requested); !ok || got != user {
+			t.Fatalf("subject(%v) = %q, %v; want %q", requested, got, ok, user)
+		}
+	}
+	if got, ok := subject(t.Context(), proto.String(upper)); !ok || got != user {
+		t.Fatalf("system subject %q, %v", got, ok)
+	}
+	if _, ok := subject(asUpper, proto.String("01a107db-ae80-7b07-b8a1-000000000002")); ok {
+		t.Fatal("another user accepted")
+	}
+}

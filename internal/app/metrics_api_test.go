@@ -7,6 +7,7 @@ package app_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -322,6 +323,11 @@ func TestAPIPurgeUserDataDeletesAndRemembers(t *testing.T) {
 	if n := rowCount(t, env, alice); n != 0 {
 		t.Fatalf("a late batch brought back %d rows", n)
 	}
+	// The same user in upper case is the same deleted user.
+	resp, err = c.ingest.UpsertUserMetrics(producer(ctx), upsert(strings.ToUpper(alice), 3, both("2026-09", 3, commonv1.Coverage_COVERAGE_PARTIAL)))
+	if err != nil || resp.GetAppliedPeriods() != 0 || rowCount(t, env, alice) != 0 {
+		t.Fatalf("late batch in upper case: %v, %v", resp, err)
+	}
 	// Any call with the deleted user's token: TOKEN_REVOKED.
 	_, err = c.analytics.ListPeriods(apitest.User(ctx, alice), &analyticsv1.ListPeriodsRequest{})
 	if status.Code(err) != codes.Unauthenticated || apitest.Reason(err) != "TOKEN_REVOKED" {
@@ -363,6 +369,13 @@ func TestAPIListPeriodsModelsAndCallers(t *testing.T) {
 	resp, err := c.analytics.ListPeriods(apitest.Caller(ctx, "assistant"), &analyticsv1.ListPeriodsRequest{UserId: proto.String(bob)})
 	if err != nil || len(resp.GetPeriods()) != 1 || resp.GetPeriods()[0].GetKey() != "2026-05" {
 		t.Fatalf("assistant's call for bob: %v, %v", keys(t, resp), err)
+	}
+	resp, err = c.analytics.ListPeriods(apitest.Caller(ctx, "assistant"), &analyticsv1.ListPeriodsRequest{UserId: proto.String(strings.ToUpper(bob))})
+	if err != nil || len(resp.GetPeriods()) != 1 {
+		t.Fatalf("assistant's call for bob in upper case: %v, %v", keys(t, resp), err)
+	}
+	if _, err := c.analytics.ListPeriods(apitest.User(ctx, alice), &analyticsv1.ListPeriodsRequest{UserId: proto.String(strings.ToUpper(alice))}); err != nil {
+		t.Fatalf("own sub in upper case: %v", err)
 	}
 	_, err = c.analytics.ListPeriods(apitest.Caller(ctx, "assistant"), &analyticsv1.ListPeriodsRequest{})
 	wantBare(t, err, codes.InvalidArgument)

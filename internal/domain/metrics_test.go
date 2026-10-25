@@ -56,9 +56,13 @@ func TestUnitValidUpsert(t *testing.T) {
 	if err := validUpsert().Validate(); err != nil {
 		t.Fatal(err)
 	}
-	// Neither state nor periods: a valid, empty batch.
-	if err := (Upsert{UserID: "01A107DB-AE80-7B07-B8A1-000000000001", Version: 1}).Validate(); err != nil {
-		t.Fatalf("empty batch with an upper-case UUID: %v", err)
+	// Neither state nor periods: a valid, empty batch. Validation accepts a UUID of either case;
+	// the handler canonicalizes it to lower case before the usecase (canonicalUserID), so the
+	// tombstone lock and comparisons see one form.
+	for _, id := range []string{"01A107DB-AE80-7B07-B8A1-000000000001", "01a107db-ae80-7b07-b8a1-000000000001"} {
+		if err := (Upsert{UserID: id, Version: 1}).Validate(); err != nil {
+			t.Fatalf("empty batch of %s: %v", id, err)
+		}
 	}
 	// A state without bounds: a user without covered days.
 	u := validUpsert()

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -255,6 +256,50 @@ func TestIntegrationBatchAfterConcurrentPurgeWritesNothing(t *testing.T) {
 	}
 	if got, err := e.uc.Upsert(ctx, domain.Upsert{UserID: user, Version: 3, State: state(3)}); err != nil || got != (metrics.Result{}) {
 		t.Fatalf("batch after a repeated purge: %+v, %v", got, err)
+	}
+}
+
+// One user in two cases of the UUID: the deletion of "01a1…" holds the tombstone guard, the
+// batch of "01A1…" waits for it, sees the tombstone and writes nothing. go-tombstone builds the
+// lock from the canonical lower-case UUID (uuid.Parse(id).String()) and tombstone_users.user_id
+// is uuid, so the case of either call cannot split the lock or the lookup.
+func TestIntegrationPurgeSerializesBatchesInAnotherCase(t *testing.T) {
+	e := start(t)
+	ctx := context.Background()
+	lower := userID(10)
+	upper := strings.ToUpper(lower)
+	purged := make(chan struct{})
+	release := make(chan struct{})
+	purgeDone := make(chan error, 1)
+	go func() {
+		purgeDone <- e.db.Run(ctx, func(ctx context.Context) error {
+			if err := e.stones.Purge(ctx, lower, e.repo.Purge); err != nil {
+				return err
+			}
+			close(purged)
+			<-release
+			return nil
+		})
+	}()
+	<-purged
+	batch := make(chan error, 1)
+	var result metrics.Result
+	go func() {
+		var err error
+		result, err = e.uc.Upsert(ctx, domain.Upsert{UserID: upper, Version: 1, State: state(1),
+			Snapshots: []domain.Snapshot{monthSnapshot("2026-09", domain.TransferWith, 1, "tiles.expense")}})
+		batch <- err
+	}()
+	waitBlocked(t, e)
+	close(release)
+	if err := <-purgeDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-batch; err != nil || result != (metrics.Result{}) {
+		t.Fatalf("batch in another case: %+v, %v; want acknowledged without effects", result, err)
+	}
+	if headers, metricRows, version := rows(t, e, lower); headers+metricRows != 0 || version != 0 {
+		t.Fatalf("after purge: %d headers, %d metrics, state v%d; want nothing", headers, metricRows, version)
 	}
 }
 

@@ -123,15 +123,21 @@ func (h *analytics) ListPeriods(ctx context.Context, req *analyticsv1.ListPeriod
 // subject is the user of a mixed-model call. The verified sub wins and a different user_id
 // is refused, never followed; without a sub (a system call admitted by the access table)
 // user_id is required.
+// Both sides are canonicalized first, so the comparison ignores the case of the UUID.
 func subject(ctx context.Context, requested *string) (string, bool) {
+	want := ""
+	if requested != nil {
+		want = canonicalUserID(*requested)
+	}
 	if sub, ok := reqctx.UserID(ctx); ok {
-		if requested != nil && *requested != "" && *requested != sub {
+		sub = canonicalUserID(sub)
+		if want != "" && want != sub {
 			return "", false
 		}
 		return sub, true
 	}
-	if requested == nil || *requested == "" {
+	if want == "" {
 		return "", false
 	}
-	return *requested, true
+	return want, true
 }
