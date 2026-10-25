@@ -82,6 +82,11 @@ func (a *App) Close() {
 func identity(cfg config.Config) (server.ServiceVerifier, server.UserVerifier, client.TokenSource, error) {
 	switch cfg.Auth.Mode {
 	case config.AuthInsecureDev:
+		// New is exported and callable without config.Load, so the dev-only gate is
+		// enforced here as well: unverified identities never outside ENV=dev.
+		if cfg.Env != config.EnvDev {
+			return nil, nil, nil, errors.New("AUTH_MODE=insecure-dev is allowed only with ENV=dev")
+		}
 		return server.DevServiceVerifier{}, server.DevUserVerifier{}, client.DevToken(cfg.Service), nil
 	default:
 		// TODO(FIN-119): JWT (Ed25519, GetSigningKeys) and ServiceAccount tokens (JWKS of

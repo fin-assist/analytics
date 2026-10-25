@@ -10,7 +10,7 @@
 
 ## Identity и удалённые пользователи
 
-Сервис передаёт серверу реализации интерфейсов проверки сервисного и пользовательского токенов. В analytics подключение production identity остаётся явным TODO: `AUTH_MODE=verify` отказывает при старте до интеграции, а `insecure-dev` разрешён только при `ENV=dev`. Это не обход проверки в stage/prod.
+Сервис передаёт серверу реализации интерфейсов проверки сервисного и пользовательского токенов. В analytics подключение production identity остаётся явным TODO: `AUTH_MODE=verify` отказывает при старте до интеграции, а `insecure-dev` разрешён только при `ENV=dev` — и в `config.Load`, и в сборке `app.New` (FIN-275). Это не обход проверки в stage/prod.
 
 `NoTombstones` остаётся временной явной реализацией каркаса analytics. Сервис с данными пользователей обязан заменить её интеграцией `go-tombstone` в `internal/app`; вынос transport-кода не реализует эту интеграцию автоматически.
 
@@ -24,7 +24,7 @@
 
 Сервис передаёт pool options в `go-postgres.OpenPools` v0.2.0. Локальный `postgres.DB` остаётся тонким адаптером менеджера транзакций и маршрутизации: `Writer` выбирает транзакцию/primary, `Reader` — транзакцию, primary для `x-read-primary` от `bank-bff` или реплику. Репозитории и domain mapping принадлежат сервису; подробнее — [migrations.md](migrations.md).
 
-`cmd/analytics` владеет listeners и порядком shutdown: readiness/health перестают сообщать готовность, выдерживается `SHUTDOWN_DELAY`, gRPC graceful stop ограничен `SHUTDOWN_TIMEOUT`, затем останавливаются jobs и закрываются пулы. Вынос библиотек не меняет этот порядок или конфигурационные defaults.
+`cmd/analytics` владеет listeners и порядком shutdown: readiness/health перестают сообщать готовность (`ops.Readiness.Drain` — необратимо, HTTP `/readyz` отвечает 503 вместе с gRPC health `NOT_SERVING`, FIN-275), выдерживается `SHUTDOWN_DELAY`, gRPC graceful stop ограничен `SHUTDOWN_TIMEOUT`, затем останавливаются jobs и закрываются пулы. Вынос библиотек не меняет этот порядок или конфигурационные defaults.
 
 ## Наблюдаемость
 

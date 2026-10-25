@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,12 +31,26 @@ func TestIntegrationAssemblyClosesOwnedPoolsWhenMetricsConflict(t *testing.T) {
 			if a != nil || err == nil {
 				t.Fatal("conflicting metrics did not abort assembly")
 			}
-			var active int
-			if err := observer.QueryRow(t.Context(), `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND application_name=$1`, cfg.Service).Scan(&active); err != nil {
-				t.Fatal(err)
-			}
-			if active != 0 {
-				t.Fatalf("failed assembly retained %d owned database connections", active)
+			// pgxpool.Close closes the client sockets, but the server backends exit
+			// asynchronously: wait, with a deadline, until pg_stat_activity drops them.
+			// A pool that was never closed keeps its backend and fails at the deadline.
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			tick := time.NewTicker(10 * time.Millisecond)
+			defer tick.Stop()
+			for {
+				var active int
+				if err := observer.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND application_name=$1`, cfg.Service).Scan(&active); err != nil {
+					t.Fatal(err)
+				}
+				if active == 0 {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					t.Fatalf("failed assembly retained %d owned database connections", active)
+				case <-tick.C:
+				}
 			}
 		})
 	}
