@@ -1,11 +1,10 @@
-package migrations_test
+package postgres
 
 // Integration tests of the analytics schema (FIN-113, docs/schema.md) on a real PostgreSQL:
 // the keys and cascades the tables enforce, the versioned upsert of UpsertUserMetrics with the
 // full set of metrics under concurrent delivery, the round trip of PeriodSnapshot through the
-// normalised rows, and the read queries the service is expected to run. The SQL and the mapping
-// (snapshot_rows_test.go) are the proposal of docs/schema.md; the repositories will take it
-// from there.
+// normalised rows, and the read queries. The write, ListPeriods and purge SQL and the mapping are
+// the repository (metrics.go); the GetAnalytics read is the FIN-5 proposal (metrics_read_test.go).
 
 import (
 	"context"
@@ -33,31 +32,11 @@ import (
 
 	"github.com/fin-assist/go-migrate"
 
+	metricsgrpc "github.com/fin-assist/analytics/internal/adapter/grpc/metrics"
+	"github.com/fin-assist/analytics/internal/domain"
 	"github.com/fin-assist/analytics/internal/testdb"
 	"github.com/fin-assist/analytics/migrations"
 )
-
-// upsertStateSQL applies UserDataState when its calc_version is not older than the stored one.
-// RETURNING gives a row only when the state was written.
-const upsertStateSQL = `
-INSERT INTO user_data_state AS s
-    (user_id, calc_version, has_data, data_from, data_to, last_operation_at, stale_after,
-     full_months, recalculating, time_zone, calculated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-ON CONFLICT (user_id) DO UPDATE
-SET calc_version = EXCLUDED.calc_version,
-    has_data = EXCLUDED.has_data,
-    data_from = EXCLUDED.data_from,
-    data_to = EXCLUDED.data_to,
-    last_operation_at = EXCLUDED.last_operation_at,
-    stale_after = EXCLUDED.stale_after,
-    full_months = EXCLUDED.full_months,
-    recalculating = EXCLUDED.recalculating,
-    time_zone = EXCLUDED.time_zone,
-    calculated_at = EXCLUDED.calculated_at,
-    applied_at = now()
-WHERE s.calc_version <= EXCLUDED.calc_version
-RETURNING s.user_id`
 
 const (
 	month   int16 = int16(commonv1.PeriodType_PERIOD_TYPE_MONTH)
@@ -93,42 +72,42 @@ func openDB(t *testing.T) *pgxpool.Pool {
 
 func newUser(i int) string { return fmt.Sprintf("01a107db-ae80-7b07-b8a1-%012d", i) }
 
-// state is UserDataState as the columns of user_data_state.
-type state struct {
-	hasData              bool
-	dataFrom, dataTo     *time.Time
-	lastOperation, stale *time.Time
-	fullMonths           int32
-	recalculating        bool
-	timeZone             string
-	calculatedAt         time.Time
-}
-
-func ptr[T any](v T) *T { return &v }
-
-func validState() state {
+// validState is a UserDataState of a user with data, as the columns of user_data_state.
+func validState() stateRow {
 	from := time.Date(2026, 9, 1, 0, 0, 0, 0, msk)
 	to := time.Date(2026, 9, 26, 0, 0, 0, 0, msk)
-	return state{
+	return stateRow{
 		hasData: true, dataFrom: &from, dataTo: &to,
 		lastOperation: ptr(time.Date(2026, 9, 25, 21, 40, 0, 0, msk)),
 		stale:         ptr(time.Date(2026, 10, 10, 0, 0, 0, 0, msk)),
-		timeZone:      "Europe/Moscow", calculatedAt: time.Date(2026, 9, 25, 21, 52, 0, 0, msk),
+		timeZone:      "Europe/Moscow", calculatedAt: ptr(time.Date(2026, 9, 25, 21, 52, 0, 0, msk)),
 	}
 }
 
-func upsertState(ctx context.Context, q querier, user string, version int32, s state) (applied bool, err error) {
-	rows, err := q.Query(ctx, upsertStateSQL, user, version, s.hasData, s.dataFrom, s.dataTo,
-		s.lastOperation, s.stale, s.fullMonths, s.recalculating, s.timeZone, s.calculatedAt)
-	if err != nil {
-		return false, err
+// upsertProto writes protobuf snapshots through the conversion of the handler and the
+// production mapping, without the validation of the usecase: the schema tests also send what
+// the validation would refuse, to check what the tables themselves keep.
+func upsertProto(ctx context.Context, q querier, user string, version int32,
+	snapshots []*analyticsv1.PeriodSnapshot, removed []*analyticsv1.PeriodRef,
+) ([]appliedRow, error) {
+	var ss []domain.Snapshot
+	for _, p := range snapshots {
+		s, err := metricsgrpc.SnapshotOf(p)
+		if err != nil {
+			return nil, err
+		}
+		ss = append(ss, s)
 	}
-	n := 0
-	for rows.Next() {
-		n++
+	var rs []domain.PeriodKey
+	for _, r := range removed {
+		rs = append(rs, domain.PeriodKey{Type: domain.PeriodType(r.GetPeriod()), Key: r.GetPeriodKey()})
 	}
-	rows.Close()
-	return n == 1, rows.Err()
+	return upsertPeriods(ctx, q, user, version, ss, rs)
+}
+
+// protoKey is the key of a protobuf snapshot.
+func protoKey(s *analyticsv1.PeriodSnapshot) periodKey {
+	return periodKey{typ: int16(s.GetPeriod()), key: s.GetPeriodKey(), mode: int16(s.GetTransferMode())}
 }
 
 func at(t time.Time) *timestamppb.Timestamp { return timestamppb.New(t) }
@@ -296,7 +275,7 @@ func TestIntegrationUserDataStateConstraints(t *testing.T) {
 	if _, err := upsertState(ctx, db, newUser(1), 1, validState()); err != nil {
 		t.Fatalf("valid state: %v", err)
 	}
-	empty := state{timeZone: "Europe/Moscow", calculatedAt: time.Now()}
+	empty := stateRow{timeZone: "Europe/Moscow", calculatedAt: ptr(time.Now())}
 	if _, err := upsertState(ctx, db, newUser(2), 1, empty); err != nil {
 		t.Fatalf("state without covered days: %v", err)
 	}
@@ -349,7 +328,7 @@ func TestIntegrationPeriodTablesConstraints(t *testing.T) {
 		snapshot(quarter, "2026-Q3", withoutTransfers, 1),
 		snapshot(year, "2026", withTransfers, 1, "tiles.expense"),
 	}
-	if _, err := upsertPeriods(ctx, db, user, 1, valid, []*analyticsv1.PeriodRef{ref(month, "2026-08")}); err != nil {
+	if _, err := upsertProto(ctx, db, user, 1, valid, []*analyticsv1.PeriodRef{ref(month, "2026-08")}); err != nil {
 		t.Fatalf("valid rows: %v", err)
 	}
 
@@ -449,7 +428,7 @@ func TestIntegrationPeriodTablesConstraints(t *testing.T) {
 
 	// A key twice in one request (a period both sent and removed) fails the whole statement:
 	// the handler validates the request before writing.
-	_, err := upsertPeriods(ctx, db, user, 2, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-07", withTransfers, 2, "tiles.expense")},
+	_, err := upsertProto(ctx, db, user, 2, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-07", withTransfers, 2, "tiles.expense")},
 		[]*analyticsv1.PeriodRef{ref(month, "2026-07")})
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "21000" {
@@ -503,7 +482,7 @@ func TestIntegrationPeriodsApplyByVersionPerKey(t *testing.T) {
 	user := newUser(1)
 	sep, aug, jul := pk(month, "2026-09", withTransfers), pk(month, "2026-08", withTransfers), pk(month, "2026-07", withTransfers)
 
-	applied, err := upsertPeriods(ctx, db, user, 5, []*analyticsv1.PeriodSnapshot{
+	applied, err := upsertProto(ctx, db, user, 5, []*analyticsv1.PeriodSnapshot{
 		snapshot(month, "2026-09", withTransfers, 5, "tiles.expense"),
 		snapshot(month, "2026-08", withTransfers, 5, "tiles.expense"),
 	}, nil)
@@ -513,7 +492,7 @@ func TestIntegrationPeriodsApplyByVersionPerKey(t *testing.T) {
 
 	// A request of an older version is skipped for the key it is older on, and applied for
 	// a key it is the first for: the version is per key, not per user.
-	applied, err = upsertPeriods(ctx, db, user, 4, []*analyticsv1.PeriodSnapshot{
+	applied, err = upsertProto(ctx, db, user, 4, []*analyticsv1.PeriodSnapshot{
 		snapshot(month, "2026-09", withTransfers, 4, "tiles.expense", "tiles.income"),
 		snapshot(month, "2026-07", withTransfers, 4, "tiles.expense"),
 	}, nil)
@@ -533,7 +512,7 @@ func TestIntegrationPeriodsApplyByVersionPerKey(t *testing.T) {
 	}
 
 	// The same version again (outbox redelivery) is applied and changes nothing.
-	applied, err = upsertPeriods(ctx, db, user, 5, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 5, "tiles.expense")}, nil)
+	applied, err = upsertProto(ctx, db, user, 5, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 5, "tiles.expense")}, nil)
 	if err != nil || len(applied) != 1 {
 		t.Fatalf("redelivery: %v %v", applied, err)
 	}
@@ -541,7 +520,7 @@ func TestIntegrationPeriodsApplyByVersionPerKey(t *testing.T) {
 	wantMetrics(t, s, 5, "tiles.expense")
 
 	// The two transfer modes of one period are separate keys.
-	if _, err := upsertPeriods(ctx, db, user, 6, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withoutTransfers, 6, "tiles.income")}, nil); err != nil {
+	if _, err := upsertProto(ctx, db, user, 6, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withoutTransfers, 6, "tiles.income")}, nil); err != nil {
 		t.Fatal(err)
 	}
 	s, _ = storedPeriod(t, db, user, sep)
@@ -579,7 +558,7 @@ func TestIntegrationLargestCalcVersionRoundTrips(t *testing.T) {
 	if ok, err := upsertState(ctx, db, user, math.MaxInt32-1, validState()); err != nil || ok {
 		t.Fatalf("older state: applied %v, %v; want skipped", ok, err)
 	}
-	applied, err := upsertPeriods(ctx, db, user, math.MaxInt32-1,
+	applied, err := upsertProto(ctx, db, user, math.MaxInt32-1,
 		[]*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, math.MaxInt32-1, "tiles.income")}, nil)
 	if err != nil || len(applied) != 0 {
 		t.Fatalf("older snapshot: applied %v, %v; want skipped", applied, err)
@@ -597,13 +576,13 @@ func TestIntegrationSnapshotReplacesMetricsAndGaps(t *testing.T) {
 	sep := pk(month, "2026-09", withTransfers)
 
 	for _, u := range []string{user, other} {
-		if _, err := upsertPeriods(ctx, db, u, 1, []*analyticsv1.PeriodSnapshot{
+		if _, err := upsertProto(ctx, db, u, 1, []*analyticsv1.PeriodSnapshot{
 			withGaps(snapshot(month, "2026-09", withTransfers, 1, "tiles.expense", "tiles.income", "tiles.balance"), 3),
 		}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := upsertPeriods(ctx, db, user, 2, []*analyticsv1.PeriodSnapshot{
+	if _, err := upsertProto(ctx, db, user, 2, []*analyticsv1.PeriodSnapshot{
 		withGaps(snapshot(month, "2026-09", withTransfers, 2, "tiles.income", "insights.future_metric"), 1),
 	}, nil); err != nil {
 		t.Fatal(err)
@@ -615,7 +594,7 @@ func TestIntegrationSnapshotReplacesMetricsAndGaps(t *testing.T) {
 	}
 
 	// A snapshot with no metrics and no gaps leaves none.
-	if _, err := upsertPeriods(ctx, db, user, 3, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 3)}, nil); err != nil {
+	if _, err := upsertProto(ctx, db, user, 3, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-09", withTransfers, 3)}, nil); err != nil {
 		t.Fatal(err)
 	}
 	s, _ = storedPeriod(t, db, user, sep)
@@ -625,7 +604,7 @@ func TestIntegrationSnapshotReplacesMetricsAndGaps(t *testing.T) {
 	}
 
 	// An older snapshot is skipped and does not bring its metrics back.
-	if _, err := upsertPeriods(ctx, db, user, 2, []*analyticsv1.PeriodSnapshot{
+	if _, err := upsertProto(ctx, db, user, 2, []*analyticsv1.PeriodSnapshot{
 		withGaps(snapshot(month, "2026-09", withTransfers, 2, "tiles.expense"), 2),
 	}, nil); err != nil {
 		t.Fatal(err)
@@ -650,13 +629,13 @@ func TestIntegrationRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
 	user := newUser(1)
 	augWith, augWithout := pk(month, "2026-08", withTransfers), pk(month, "2026-08", withoutTransfers)
 
-	if _, err := upsertPeriods(ctx, db, user, 3, []*analyticsv1.PeriodSnapshot{
+	if _, err := upsertProto(ctx, db, user, 3, []*analyticsv1.PeriodSnapshot{
 		withGaps(snapshot(month, "2026-08", withTransfers, 3, "tiles.expense"), 1),
 		snapshot(month, "2026-08", withoutTransfers, 3, "tiles.expense"),
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
-	applied, err := upsertPeriods(ctx, db, user, 5, nil, []*analyticsv1.PeriodRef{ref(month, "2026-08")})
+	applied, err := upsertProto(ctx, db, user, 5, nil, []*analyticsv1.PeriodRef{ref(month, "2026-08")})
 	if err != nil || len(applied) != 2 || !applied[0].removed || !applied[1].removed {
 		t.Fatalf("removal: %v %v", applied, err)
 	}
@@ -669,7 +648,7 @@ func TestIntegrationRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
 
 	// A snapshot of version 4, delivered after the removal of version 5, must not bring the
 	// period back: the marker keeps version 5, and no metrics are written for it.
-	applied, err = upsertPeriods(ctx, db, user, 4, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-08", withTransfers, 4, "tiles.expense")}, nil)
+	applied, err = upsertProto(ctx, db, user, 4, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-08", withTransfers, 4, "tiles.expense")}, nil)
 	if err != nil || len(applied) != 0 {
 		t.Fatalf("late snapshot after removal: applied %v, %v; want skipped", applied, err)
 	}
@@ -681,26 +660,91 @@ func TestIntegrationRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
 		t.Fatalf("latest period %v, %v; want none: markers are not periods with data", latest, err)
 	}
 
-	// A removal of an older version does not remove a newer snapshot.
-	if _, err := upsertPeriods(ctx, db, user, 7, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-08", withTransfers, 7, "tiles.expense")}, nil); err != nil {
+	// A removal of an older version does not remove a newer snapshot. The removal is compared
+	// with the greater version of both modes (grpc-api.md 7.3, «Версии»): with the v7 snapshot in
+	// one mode and the v5 marker in the other, the v6 removal is skipped whole — the marker of the
+	// other mode is not raised to v6 either.
+	if _, err := upsertProto(ctx, db, user, 7, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-08", withTransfers, 7, "tiles.expense")}, nil); err != nil {
 		t.Fatal(err)
 	}
-	applied, err = upsertPeriods(ctx, db, user, 6, nil, []*analyticsv1.PeriodRef{ref(month, "2026-08")})
+	applied, err = upsertProto(ctx, db, user, 6, nil, []*analyticsv1.PeriodRef{ref(month, "2026-08")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) != 1 || applied[0].mode != withoutTransfers {
-		t.Fatalf("older removal applied to %v, want only the mode without (still on v5)", applied)
+	if len(applied) != 0 {
+		t.Fatalf("older removal applied to %v, want it skipped in both modes", applied)
 	}
 	s, _ := storedPeriod(t, db, user, augWith)
 	if s.removed || s.version != 7 {
 		t.Fatalf("2026-08 is v%d removed %v after an older removal, want the v7 snapshot", s.version, s.removed)
 	}
 	wantMetrics(t, s, 7, "tiles.expense")
+	if s, _ := storedPeriod(t, db, user, augWithout); !s.removed || s.version != 5 {
+		t.Fatalf("mode without is v%d removed %v, want the v5 marker untouched", s.version, s.removed)
+	}
+
+	// A removal of the same version as the newest row of the period is applied to both modes.
+	applied, err = upsertProto(ctx, db, user, 7, nil, []*analyticsv1.PeriodRef{ref(month, "2026-08")})
+	if err != nil || len(applied) != 2 {
+		t.Fatalf("removal of the newest version: %v %v; want both modes", applied, err)
+	}
+	for _, k := range []periodKey{augWith, augWithout} {
+		if s, _ := storedPeriod(t, db, user, k); !s.removed || s.version != 7 || len(s.metrics) != 0 {
+			t.Fatalf("mode %d: %+v, want a v7 marker", k.mode, s)
+		}
+	}
 
 	// A removal of a period the service never saw leaves markers too.
-	if applied, err := upsertPeriods(ctx, db, user, 8, nil, []*analyticsv1.PeriodRef{ref(month, "2025-01")}); err != nil || len(applied) != 2 {
+	if applied, err := upsertProto(ctx, db, user, 8, nil, []*analyticsv1.PeriodRef{ref(month, "2025-01")}); err != nil || len(applied) != 2 {
 		t.Fatalf("removal of an unknown period: %v %v", applied, err)
+	}
+}
+
+// A marker (tombstone of the period) only grows: a removal older than an existing marker is
+// skipped and a redelivered old removal does not lower it, also when only one mode has a
+// marker and the other a newer snapshot (contracts#60, FIN-283).
+func TestIntegrationRemovalMarkerVersionOnlyGrows(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	user := newUser(1)
+	julWith, julWithout := pk(month, "2026-07", withTransfers), pk(month, "2026-07", withoutTransfers)
+
+	if applied, err := upsertProto(ctx, db, user, 5, nil, []*analyticsv1.PeriodRef{ref(month, "2026-07")}); err != nil || len(applied) != 2 {
+		t.Fatalf("removal v5: %v %v", applied, err)
+	}
+	for _, version := range []int32{4, 3, 4} {
+		if applied, err := upsertProto(ctx, db, user, version, nil, []*analyticsv1.PeriodRef{ref(month, "2026-07")}); err != nil || len(applied) != 0 {
+			t.Fatalf("removal v%d after the v5 markers: %v %v; want skipped", version, applied, err)
+		}
+	}
+	for _, k := range []periodKey{julWith, julWithout} {
+		if s, _ := storedPeriod(t, db, user, k); !s.removed || s.version != 5 {
+			t.Fatalf("mode %d: v%d removed %v, want the v5 marker", k.mode, s.version, s.removed)
+		}
+	}
+
+	// A period sent again in one mode only: v6 snapshot in mode without, the v5 marker stays in
+	// mode with. A removal v5 or older is skipped in both modes; v6 removes both.
+	if applied, err := upsertProto(ctx, db, user, 6, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-07", withoutTransfers, 6, "tiles.income")}, nil); err != nil || len(applied) != 1 {
+		t.Fatalf("one-mode snapshot v6: %v %v", applied, err)
+	}
+	if applied, err := upsertProto(ctx, db, user, 4, nil, []*analyticsv1.PeriodRef{ref(month, "2026-07")}); err != nil || len(applied) != 0 {
+		t.Fatalf("removal v4 with a marker in one mode only: %v %v; want skipped", applied, err)
+	}
+	if s, _ := storedPeriod(t, db, user, julWith); !s.removed || s.version != 5 {
+		t.Fatalf("mode with: v%d removed %v, want the v5 marker", s.version, s.removed)
+	}
+	s, _ := storedPeriod(t, db, user, julWithout)
+	if s.removed || s.version != 6 {
+		t.Fatalf("mode without: v%d removed %v, want the v6 snapshot", s.version, s.removed)
+	}
+	wantMetrics(t, s, 6, "tiles.income")
+	if applied, err := upsertProto(ctx, db, user, 6, nil, []*analyticsv1.PeriodRef{ref(month, "2026-07")}); err != nil || len(applied) != 2 {
+		t.Fatalf("removal v6: %v %v; want both modes", applied, err)
+	}
+	// A snapshot older than the v6 marker does not come back in either mode.
+	if applied, err := upsertProto(ctx, db, user, 5, both(month, "2026-07", 5, "tiles.expense"), nil); err != nil || len(applied) != 0 {
+		t.Fatalf("snapshots v5 after the v6 markers: %v %v; want skipped", applied, err)
 	}
 }
 
@@ -721,7 +765,7 @@ func deliver(ctx context.Context, db *pgxpool.Pool, user string, version int32, 
 			return fmt.Errorf("state v%d: %w", version, err)
 		}
 	}
-	if _, err := upsertPeriods(ctx, tx, user, version, snapshots, removed); err != nil {
+	if _, err := upsertProto(ctx, tx, user, version, snapshots, removed); err != nil {
 		return fmt.Errorf("periods v%d: %w", version, err)
 	}
 	return tx.Commit(ctx)
@@ -928,10 +972,10 @@ func writeAndRead(t *testing.T, db *pgxpool.Pool, user string, s *analyticsv1.Pe
 	if _, err := upsertState(ctx, db, user, 1, validState()); err != nil {
 		t.Fatal(err)
 	}
-	if applied, err := upsertPeriods(ctx, db, user, 1, []*analyticsv1.PeriodSnapshot{s}, nil); err != nil || len(applied) != 1 {
+	if applied, err := upsertProto(ctx, db, user, 1, []*analyticsv1.PeriodSnapshot{s}, nil); err != nil || len(applied) != 1 {
 		t.Fatalf("write: %v %v", applied, err)
 	}
-	got, err := readAnalytics(ctx, db, user, keyOf(s))
+	got, err := readAnalytics(ctx, db, user, protoKey(s))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -991,7 +1035,7 @@ func TestIntegrationSnapshotRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _, _ = conn.Exec(ctx, `RESET enable_indexscan; RESET enable_bitmapscan`) }()
-		again, err := readAnalytics(ctx, conn, newUser(1), keyOf(in))
+		again, err := readAnalytics(ctx, conn, newUser(1), protoKey(in))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1050,7 +1094,7 @@ func TestIntegrationRoundTripDropsWhatIsNotStored(t *testing.T) {
 		newUser(1), `{"categories": {"items": [{"category_name": "Кафе", "amount_minor": "100", "future_field": 1}]}, "future_kind": {}}`); err != nil {
 		t.Fatal(err)
 	}
-	read, err := readAnalytics(ctx, db, newUser(1), keyOf(in))
+	read, err := readAnalytics(ctx, db, newUser(1), protoKey(in))
 	if err != nil {
 		t.Fatalf("read of details with unknown keys: %v", err)
 	}
@@ -1144,7 +1188,7 @@ func seedForReads(t *testing.T, db *pgxpool.Pool, user string) {
 			snapshot(month, k, withoutTransfers, 10, "tiles.expense"))
 	}
 	snapshots = append(snapshots, snapshot(quarter, "2026-Q2", withTransfers, 10, "tiles.expense"), snapshot(year, "2026", withTransfers, 10))
-	if _, err := upsertPeriods(ctx, db, user, 10, snapshots, []*analyticsv1.PeriodRef{ref(month, "2026-07")}); err != nil {
+	if _, err := upsertProto(ctx, db, user, 10, snapshots, []*analyticsv1.PeriodRef{ref(month, "2026-07")}); err != nil {
 		t.Fatal(err)
 	}
 	// 2026-06 is complete in both modes.
@@ -1159,7 +1203,7 @@ func TestIntegrationReadQueries(t *testing.T) {
 	user, other := newUser(1), newUser(2)
 	seedForReads(t, db, user)
 	seedForReads(t, db, other)
-	if _, err := upsertPeriods(ctx, db, other, 11, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-10", withTransfers, 11, "tiles.expense")}, nil); err != nil {
+	if _, err := upsertProto(ctx, db, other, 11, []*analyticsv1.PeriodSnapshot{snapshot(month, "2026-10", withTransfers, 11, "tiles.expense")}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1226,7 +1270,7 @@ func TestIntegrationReadQueries(t *testing.T) {
 	})
 
 	t.Run("list periods", func(t *testing.T) {
-		rows, err := db.Query(ctx, listPeriodsSQL, user, month)
+		got, err := listPeriods(ctx, db, user, domain.PeriodMonth)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1234,17 +1278,24 @@ func TestIntegrationReadQueries(t *testing.T) {
 			key      string
 			coverage int16
 		}
-		got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (item, error) {
-			var i item
-			var s, e time.Time
-			return i, r.Scan(&i.key, &s, &e, &i.coverage)
-		})
-		if err != nil {
-			t.Fatal(err)
+		var items []item
+		for _, p := range got.Items {
+			items = append(items, item{p.Key, int16(p.Coverage)})
 		}
 		want := []item{{"2026-09", partial}, {"2026-08", partial}, {"2026-06", complete}, {"2026-05", partial}}
-		if !slices.Equal(got, want) {
-			t.Fatalf("periods %v, want %v: newest first, one per period, no removed ones", got, want)
+		if !slices.Equal(items, want) || got.TimeZone != "Europe/Moscow" {
+			t.Fatalf("periods %v in %q, want %v in Europe/Moscow: newest first, one per period, no removed ones", items, got.TimeZone, want)
+		}
+		start, end := periodRange(month, "2026-09")
+		if !got.Items[0].Start.Equal(start) || !got.Items[0].End.Equal(end) {
+			t.Fatalf("range of 2026-09: %v–%v, want %v–%v", got.Items[0].Start, got.Items[0].End, start, end)
+		}
+		// Another type has its own periods; a user without state or periods gets nothing.
+		if q, err := listPeriods(ctx, db, user, domain.PeriodQuarter); err != nil || len(q.Items) != 1 || q.Items[0].Key != "2026-Q2" {
+			t.Fatalf("quarters %+v, %v; want 2026-Q2", q, err)
+		}
+		if none, err := listPeriods(ctx, db, newUser(99), domain.PeriodMonth); err != nil || none.TimeZone != "" || len(none.Items) != 0 {
+			t.Fatalf("unknown user: %+v, %v; want nothing", none, err)
 		}
 	})
 
@@ -1321,7 +1372,7 @@ func TestIntegrationReadQueriesAcrossYearBoundary(t *testing.T) {
 			snapshot(c.typ, c.older, withTransfers, 1, "tiles.expense"),
 			snapshot(c.typ, c.olderInTheYear, withTransfers, 1, "tiles.expense"),
 		}
-		if _, err := upsertPeriods(ctx, db, user, 1, snapshots, []*analyticsv1.PeriodRef{ref(c.typ, c.removedAfter)}); err != nil {
+		if _, err := upsertProto(ctx, db, user, 1, snapshots, []*analyticsv1.PeriodRef{ref(c.typ, c.removedAfter)}); err != nil {
 			t.Fatalf("%s: %v", c.name, err)
 		}
 	}
@@ -1350,18 +1401,13 @@ func TestIntegrationReadQueriesAcrossYearBoundary(t *testing.T) {
 					deref(got.previous), deref(got.next), c.older, c.removedAfter)
 			}
 
-			rows, err := db.Query(ctx, listPeriodsSQL, user, c.typ)
+			periods, err := listPeriods(ctx, db, user, domain.PeriodType(c.typ))
 			if err != nil {
 				t.Fatal(err)
 			}
-			keys, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (string, error) {
-				var key string
-				var s, e time.Time
-				var coverage int16
-				return key, r.Scan(&key, &s, &e, &coverage)
-			})
-			if err != nil {
-				t.Fatal(err)
+			var keys []string
+			for _, p := range periods.Items {
+				keys = append(keys, p.Key)
 			}
 			if want := []string{c.newer, c.older, c.olderInTheYear}; !slices.Equal(keys, want) {
 				t.Fatalf("periods %v, want %v", keys, want)
@@ -1433,7 +1479,14 @@ func TestIntegrationQueriesUsePrimaryKey(t *testing.T) {
 			[]string{"user_data_state_pkey", "period_snapshot_pkey", "period_gap_pkey", "period_metric_pkey"}, true,
 			map[string]int{"(transfer_mode = p.transfer_mode)": 1, "(transfer_mode = '1'::smallint)": 2}},
 		{"latest period", latestPeriodSQL, []any{user, month}, []string{"period_snapshot_pkey"}, false, nil},
-		{"list periods", listPeriodsSQL, []any{user, month}, []string{"period_snapshot_pkey"}, false, nil},
+		// sortOK: the outer ORDER BY of the lateral join sorts the periods of one user and type.
+		{"list periods", listPeriodsSQL, []any{user, month}, []string{"user_data_state_pkey", "period_snapshot_pkey"}, true, nil},
+		// The removal check reads the rows of the user by the key prefix (at most the few hundred
+		// headers of one user), never the whole table.
+		{"headers and markers", upsertHeadersSQL, []any{user, int32(2), []int16{month, month}, []string{"2026-08", "2026-08"},
+			[]int16{withTransfers, withoutTransfers}, []bool{true, true}, []*time.Time{nil, nil}, []*time.Time{nil, nil},
+			[]*int16{nil, nil}, []*time.Time{nil, nil}, []*time.Time{nil, nil}, []*int32{nil, nil}, []*time.Time{nil, nil}},
+			[]string{"period_snapshot_pkey"}, true, nil},
 		{"replace children", deleteChildrenSQL, applied, []string{"period_gap_pkey", "period_metric_pkey"}, false,
 			map[string]int{"AND (transfer_mode = a": 2}},
 		{"purge headers", `DELETE FROM period_snapshot WHERE user_id = $1`, []any{user}, []string{"period_snapshot_pkey"}, false, nil},

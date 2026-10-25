@@ -53,7 +53,7 @@ func TestAPICommandMigrationDeploymentServesOperationsAndStops(t *testing.T) {
 		t.Fatal(err)
 	}
 	var versions bytes.Buffer
-	if err := runMigrate(t.Context(), []string{"version"}, &versions); err != nil || versions.String() != "service\t1\n" {
+	if err := runMigrate(t.Context(), []string{"version"}, &versions); err != nil || versions.String() != "tombstone\t1\nservice\t1\n" {
 		t.Fatalf("deployment migration version: %q %v", versions.String(), err)
 	}
 	_ = grpcPort.Close()

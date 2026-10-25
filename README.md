@@ -16,10 +16,10 @@
 
 [Политика Renovate](docs/renovate-policy.md) (FIN-211): одна актуальная release/main, автомерж полностью ботских PR после обязательного CI, один повтор красного CI и закрытие с явным повтором через Dependency Dashboard. AndroidX/Compose остаются на ручной проверке. Исходные группировки, ограничения версий и расписания — `renovate-base.json`; generated target и quarantine — ветка `renovate-policy`. Активация требует отдельного токена и строгой защиты веток; по умолчанию выключена.
 
-## Что ещё не подключено
+## Что реализовано и что нет
 
-- Обработчики `AnalyticsService`, `MetricsIngestService`, `UserDeletionService` и их строки в `AccessPolicy()` — отдельными задачами: сборка экрана `GetAnalytics` — [FIN-5](https://finassist.youtrack.cloud/issue/FIN-5), `UpsertUserMetrics`, `ListPeriods`, `PurgeUserData` — [FIN-283](https://finassist.youtrack.cloud/issue/FIN-283).
-- Identity и tombstone — `AUTH_MODE=verify` не стартует, `NoTombstones` до подключения выпущенных `go-identity v0.1.0` и `go-tombstone v0.1.0` ([FIN-282](https://finassist.youtrack.cloud/issue/FIN-282)); миграции `go-tombstone` встают в `MigrationSources()` перед источником сервиса.
+- **FIN-330** ([FIN-282](https://finassist.youtrack.cloud/issue/FIN-282), [FIN-283](https://finassist.youtrack.cloud/issue/FIN-283), [FIN-290](https://finassist.youtrack.cloud/issue/FIN-290)): `AUTH_MODE=verify` через `go-identity v0.2.0` `NewAssembly` (prod — Kubernetes ServiceAccount, stage — файлы ключей, переменные `AUTH_*` как в assistant), `go-tombstone v0.1.0` вместо `NoTombstones` (admission `TOKEN_REVOKED`, `Guard` в записи, источник миграций перед сервисным); `MetricsIngestService.UpsertUserMetrics`, `AnalyticsService.ListPeriods` и `UserDeletionService.PurgeUserData` по схеме FIN-113 и правилам записи contracts#60 ([docs/schema.md](docs/schema.md)); `make test-names` классифицирует fuzz-цели и отклоняет `Example…`.
+- **Не реализовано**: сборка экрана `GetAnalytics` — [FIN-5](https://finassist.youtrack.cloud/issue/FIN-5) (метод зарегистрирован и отвечает `UNIMPLEMENTED`; предложенное чтение 6.1 лежит в `internal/adapter/postgres/metrics_read_test.go`).
 - Секрет `CLAUDE_CODE_OAUTH_TOKEN`, Claude GitHub App и Codex на репозитории — настраивает владелец.
 
 ## Раскладка
@@ -29,9 +29,9 @@ cmd/analytics/                     main: serve and migrate commands, listeners, 
 internal/app/                      assembly: identity, pools, server, wire() (handlers, clients, jobs), access table, migration sources
 internal/app/apitest/              the whole service in-process for API tests
 internal/domain/                   entities and invariants, no infrastructure imports
-internal/<feature>/                usecases; interfaces of repositories and clients they need
-internal/adapter/grpc/<feature>/   gRPC handlers: messages <-> usecases
-internal/adapter/postgres/         pools, go-postgres adapter, repositories on pgx
+internal/metrics/                  usecases of the stored metrics; interfaces of the repository, guard and observer
+internal/adapter/grpc/metrics/     gRPC handlers: messages <-> domain, UpsertUserMetrics and ListPeriods
+internal/adapter/postgres/         pools, go-postgres adapter, the metrics repository on pgx
 internal/testdb/                   test server selection; public go-migrate harness owns isolated databases
 internal/config/                   configuration from the environment
 internal/logx/                     slog with values from the context
@@ -57,10 +57,10 @@ make run
 
 ## Библиотеки и обновления
 
-FIN-257 подключает выпущенные `go-grpc v0.1.0` (server/client/reqctx), `go-migrate v0.1.0` (runner и публичный migratetest), `go-worker v0.1.0` (supervision с прежним restart5s) и `go-postgres v0.2.0` (pool lifecycle). Локальные копии удалены. Сервис сохраняет CLI, listeners/shutdown, конфигурацию, access policy, migration sources и тонкий transaction/routing adapter. Реальные миграции и schema tests analytics сохранены; бизнес-RPC, jobs, identity/tombstone интеграция остаются отдельными задачами. Тесты вызывают operational API полной сборки без фиктивного бизнес-функционала.
+FIN-257 подключила выпущенные `go-grpc` (server/client/reqctx), `go-migrate` (runner и публичный migratetest), `go-worker v0.1.0` (supervision с прежним restart5s) и `go-postgres v0.2.0` (pool lifecycle). Сейчас: `go-grpc v0.2.0` (FIN-330, смешанная модель `ListPeriods` без перехода в системный вариант по неверному токену), `go-migrate v0.1.1`, `go-identity v0.2.0`, `go-tombstone v0.1.0`. Локальных копий нет. Сервис сохраняет CLI, listeners/shutdown, конфигурацию, access policy, migration sources и тонкий transaction/routing adapter.
 
 
-Транзакциями управляет [`go-postgres v0.2.0`](https://github.com/fin-assist/go-postgres) ([FIN-240](https://finassist.youtrack.cloud/issue/FIN-240)); `postgres.DB` сохраняет настройку пулов и прежний выбор primary/replica. `RunMapped` принимает обработчик конкретной операции из адаптера сервиса, включая отложенные ошибки COMMIT. Прикладные RPC analytics пока не зарегистрированы: production mappings и новые контрактные ошибки не добавлены. Правила — [docs/migrations.md](docs/migrations.md), «Нарушения ограничений и транзакции».
+Транзакциями управляет [`go-postgres v0.2.0`](https://github.com/fin-assist/go-postgres) ([FIN-240](https://finassist.youtrack.cloud/issue/FIN-240)); `postgres.DB` сохраняет настройку пулов и прежний выбор primary/replica. `RunMapped` принимает обработчик конкретной операции из адаптера сервиса, включая отложенные ошибки COMMIT. Операциям analytics отображение нарушений ограничений не нужно: запросы проверяются до записи, неизвестное нарушение остаётся `INTERNAL`; `RunMapped` не используется. Правила — [docs/migrations.md](docs/migrations.md), «Нарушения ограничений и транзакции».
 
 Общий код сервисов — отдельные Go-библиотеки из шаблона [`fin-assist/go-library-template`](https://github.com/fin-assist/go-library-template) ([FIN-118](https://finassist.youtrack.cloud/issue/FIN-118)): [`go-identity`](https://github.com/fin-assist/go-identity) (FIN-119), [`go-idempotency`](https://github.com/fin-assist/go-idempotency) (FIN-78), [`go-outbox`](https://github.com/fin-assist/go-outbox) (FIN-109), [`go-tombstone`](https://github.com/fin-assist/go-tombstone) (FIN-110).
 
@@ -102,7 +102,7 @@ make cover-combined        # informational union of the three profiles
 make cover                 # collect all three, then enforce each gate
 ```
 
-Каждый прогон использует `-race -count=1 -timeout=8m -coverpkg=./...` и выбирает функции с префиксом `TestUnit`, `TestIntegration` или `TestAPI`. Новый тест обязательно получает один из этих префиксов; `make test-names` и CI отвергают остальные имена через штатный `go test -race -list`. Все наборы инструментируют один и тот же Go-модуль целиком, включая generated production-код и Go-файлы инфраструктуры `internal/app/apitest`/`internal/testdb`; исключений пакетов или файлов ради порога нет. `_test.go` Go в production-профиль не включает. Чистые функции и правила — unit; PostgreSQL, транспорт, клиенты и фоновые процессы — integration; полная сборка приложения с вызовом публичного API — api. Прямой вызов handler не считается API-тестом.
+Каждый прогон использует `-race -count=1 -timeout=8m -coverpkg=./...` и выбирает функции с префиксом `(Test|Fuzz)Unit`, `(Test|Fuzz)Integration` или `(Test|Fuzz)API`. Новый тест обязательно получает один из этих префиксов; `make test-names` и CI отвергают остальные имена через штатный `go test -race -list`. Fuzz-цель называется `FuzzUnit…`/`FuzzIntegration…`/`FuzzAPI…` — её seed-корпус выполняется в своём наборе; `Example…` отклоняется: публичного Go API у сервиса нет, а префикс набора в имени примера невозможен, и он выполнялся бы вне всех трёх наборов (FIN-290). Все наборы инструментируют один и тот же Go-модуль целиком, включая generated production-код и Go-файлы инфраструктуры `internal/app/apitest`/`internal/testdb`; исключений пакетов или файлов ради порога нет. `_test.go` Go в production-профиль не включает. Чистые функции и правила — unit; PostgreSQL, транспорт, клиенты и фоновые процессы — integration; полная сборка приложения с вызовом публичного API — api. Прямой вызов handler не считается API-тестом.
 
 `scripts/check-suite.sh` проверяет JSON-события Go: набор должен действительно выполнить хотя бы один тест и завершиться без failed/skipped тестов. Отсутствующий, пустой профиль, только заголовок и профиль без исполняемых statements отвергаются. Это проверка факта исполнения, не собственный расчёт процентов. Для всех coverage-прогонов `CI=true`: отсутствие PostgreSQL даёт ошибку, а не успешный skip. Инструмент округляет процент до одного знака перед проверкой порога; это согласованное поведение v2.20.1.
 

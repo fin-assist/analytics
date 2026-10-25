@@ -45,13 +45,15 @@ updates them in the same PR. A service made from the template rewrites the first
 | Assembly: identity, pools, server; wiring of adapters, usecases and handlers (`wire()`), the access table (`AccessPolicy()`), migration sources | `internal/app/` (`app.go`, `wire.go`) |
 | The whole service in-process for API tests | `internal/app/apitest/` |
 | Entities and invariants (no pgx, gRPC or generated code) | `internal/domain/` |
-| Usecases and the interfaces of repositories and clients they need | `internal/<feature>/` |
+| Usecases and the interfaces of repositories and clients they need | `internal/<feature>/`; the stored metrics — `internal/metrics/` |
+| Validated batch of UpsertUserMetrics: domain types and every rule of «Инварианты в коде сервиса» | `internal/domain/metrics.go` |
+| Identity assembly (go-identity `NewAssembly`) and tombstone admission | `internal/app/identity.go`, `internal/app/app.go`; settings — `internal/config/identity.go` |
 | gRPC server, interceptors, access table types, identity and tombstone interfaces | `github.com/fin-assist/go-grpc/server`; rules — `docs/server.md` |
-| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/` |
+| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/`; UpsertUserMetrics/ListPeriods — `internal/adapter/grpc/metrics/` (proto ↔ domain conversion) |
 | Pools, transaction manager, repositories | `internal/adapter/postgres/`; rules — `docs/migrations.md`, «Запросы на pgx» |
 | Migration runner and the PostgreSQL for tests | `github.com/fin-assist/go-migrate`, its public `migratetest`, `internal/testdb/` |
 | SQL migrations (embedded) | `migrations/`; rules — `docs/migrations.md` |
-| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the proposed SQL and the `PeriodSnapshot` ↔ rows mapping — `migrations/snapshot_rows_test.go`; tests on PostgreSQL — `migrations/schema_test.go`, unit tests of the mapping — `migrations/snapshot_rows_unit_test.go` |
+| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the write, ListPeriods and purge SQL and the snapshot → rows mapping — `internal/adapter/postgres/metrics.go`; the GetAnalytics read proposed for FIN-5 — `internal/adapter/postgres/metrics_read_test.go`; tests on PostgreSQL — `metrics_schema_test.go`, unit tests of the mapping — `metrics_mapping_unit_test.go` (same package) |
 | Clients of other services, service token source | `github.com/fin-assist/go-grpc/client`; future peer-specific adapters in `internal/adapter/client/` |
 | Background jobs | `github.com/fin-assist/go-worker`; future jobs in `internal/worker/` |
 | Configuration: every variable with its default and description | `internal/config/vars.go` (`Vars`); generated tables — `docs/config.md` |
@@ -151,8 +153,9 @@ Priorities when they pull apart, in this order:
   with `db.Run`; repositories take `db.Writer(ctx)` / `db.Reader(ctx)`; no calls to other services inside `Run`.
   `DB` delegates transactions to one `go-postgres` Manager per primary pool. Operation-specific constraint-to-domain
   mapping stays in PostgreSQL adapters through outer `RunMapped`; nested calls use `Run`. Foreign transaction
-  contexts are rejected by the manager and by Writer/Reader, never silently sent to a pool. No production mappings
-  or business RPCs are invented for the current analytics scaffold.
+  contexts are rejected by the manager and by Writer/Reader, never silently sent to a pool. The metrics writes need no
+  constraint mapping (requests are validated before writing; an unknown violation stays INTERNAL) and refuse to run
+  outside db.Run (`ErrTransactionRequired`).
   Migrations follow `docs/migrations.md` (two releases for an incompatible change, `CONCURRENTLY` alone in a file).
 - No validation or logic in the schema (owner's decision of 19.10.2026, FIN-194; `docs/migrations.md`, «Что можно
   в схеме»; Confluence «Архитектура» → «Миграции и доступ к БД» → «Что можно в схеме БД»): allowed are
@@ -227,8 +230,10 @@ Also:
   Run with `-race`; no sleeps for synchronisation — wait on a channel or a condition with a deadline.
 - The measurable gate is at least 80% of all production-code statements for each of unit, integration and API
   separately (`make cover`, README and `docs/testing.md`). Combined coverage cannot compensate for a failing suite.
-  Name every test `TestUnit…`, `TestIntegration…` or `TestAPI…`; classify it by its actual dependencies and assembly.
-  `make test-names` and CI reject unclassified test names using native `go test -race -list`; every collect target requires this classification first.
+  Name every test `TestUnit…`, `TestIntegration…` or `TestAPI…` and every fuzz target `FuzzUnit…`, `FuzzIntegration…`
+  or `FuzzAPI…` (its seed corpus runs in that suite); classify it by its actual dependencies and assembly.
+  `make test-names` and CI reject unclassified Test/Fuzz names and any `Example…` (it would run outside all three
+  suites) using native `go test -race -list` (FIN-290); every collect target requires this classification first.
 
 ## Checks
 
@@ -399,4 +404,20 @@ FIN-211: dependency-only Renovate PRs may be merged/closed by the reviewed `reno
 
 ## Shared infrastructure (FIN-257)
 
-The service keeps CLI/listener ownership, configuration, access policy, migration sources, PostgreSQL routing and error mapping. Shared interceptors/client/reqctx, migration runner/test harness, pool lifecycle and worker supervision are imported from released libraries; no local transport/runner copies remain. `AUTH_MODE=verify` and NoTombstones remain the existing scaffold state; this task does not activate production identity or business RPCs. Integration/API tests retain the real analytics migration and schema; operational API tests never register fake business RPCs or SQL. Unit assembly/lifecycle ports do not open a database or network.
+The service keeps CLI/listener ownership, configuration, access policy, migration sources, PostgreSQL routing and error mapping. Shared interceptors/client/reqctx, migration runner/test harness, pool lifecycle and worker supervision are imported from released libraries; no local transport/runner copies remain. Integration/API tests retain the real analytics migration and schema; operational API tests never register fake business RPCs or SQL. Unit assembly/lifecycle ports do not open a database or network.
+
+## Identity, tombstones and stored metrics (FIN-330)
+
+- FIN-282: `AUTH_MODE=verify` is go-identity v0.2.0 `NewAssembly` in `internal/app/identity.go`: ENV=prod Kubernetes
+  ServiceAccounts, ENV=stage file keys, user JWTs from `user.GetSigningKeys` (`PEER_USER_ADDR`); verify in dev and an
+  incomplete setting fail startup in config and in `app.New`, never a weaker mode. The `identity-keys` job refreshes
+  the key caches; the user connection closes after the jobs. Keep the go-grpc server chain, no second identity
+  interceptor. go-grpc is v0.2.0: a mixed-model call of bank-bff without a valid user token is INVALID_TOKEN.
+- go-tombstone v0.1.0 replaces NoTombstones: its migration source precedes the service; admission reads the primary
+  on every user call (TOKEN_REVOKED); every user-data write calls `Guard` first in its db.Run, and a deleted user's
+  system event is OK without effects. PurgeUserData is the library's DeletionServer with `Metrics.Purge`.
+- FIN-283: UpsertUserMetrics validates the whole batch (`domain.Upsert.Validate`, bare INVALID_ARGUMENT) before one
+  READ COMMITTED transaction: guard → state → headers/markers (removal compared with the greater version of both
+  modes; relies on the guard's per-user serialization) → children of the applied keys. ListPeriods takes the user
+  from the verified sub (a different request user_id is refused) or from user_id of the assistant system call.
+  GetAnalytics is FIN-5 and answers UNIMPLEMENTED. A schema or query change updates `docs/schema.md` and its tests.

@@ -1,18 +1,26 @@
 # gRPC, фоновые задания и сборка сервиса
 
-Контракт межсервисного взаимодействия — [`fin-assist/contracts/docs/grpc-api.md`](https://github.com/fin-assist/contracts/blob/main/docs/grpc-api.md). FIN-257 подключает опубликованные механизмы вместо локальных копий. Публичные параметры, порядок интерцепторов, правила metadata, ошибок и retry описаны в [`go-grpc v0.1.0`](https://github.com/fin-assist/go-grpc/tree/v0.1.0); lifecycle заданий — в [`go-worker v0.1.0`](https://github.com/fin-assist/go-worker/tree/v0.1.0).
+Контракт межсервисного взаимодействия — [`fin-assist/contracts/docs/grpc-api.md`](https://github.com/fin-assist/contracts/blob/main/docs/grpc-api.md). FIN-257 подключает опубликованные механизмы вместо локальных копий. Публичные параметры, порядок интерцепторов, правила metadata, ошибок и retry описаны в [`go-grpc v0.2.0`](https://github.com/fin-assist/go-grpc/tree/v0.2.0) (FIN-330: v0.2.0 нужен для смешанной модели `ListPeriods` — вызов `bank-bff` без токена пользователя или с неверным заголовком `authorization` получает `INVALID_TOKEN`, а не системный вариант с `user_id` из запроса, FIN-299); lifecycle заданий — в [`go-worker v0.1.0`](https://github.com/fin-assist/go-worker/tree/v0.1.0).
 
 ## Ответственность сервиса
 
-`internal/app` связывает `go-grpc/server` с identity/tombstone реализациями, logger, реестром метрик и настройками сервиса. `wire()` регистрирует прикладные обработчики и возвращает реальные исходящие клиенты и jobs; `AccessPolicy()` задаёт правила зарегистрированных методов по таблице grpc-api.md 3.3. Текущий каркас analytics не добавляет бизнес-RPC, клиентов или заданий. Health и dev reflection принадлежат инфраструктурной сборке.
+`internal/app` связывает `go-grpc/server` с identity/tombstone реализациями, logger, реестром метрик и настройками сервиса. `wire()` регистрирует прикладные обработчики и возвращает реальные исходящие клиенты и jobs; `AccessPolicy()` задаёт правила зарегистрированных методов по таблице grpc-api.md 3.3:
+
+| Метод | Вызывающие | Модель |
+|---|---|---|
+| `analytics.AnalyticsService/*` | `bank-bff`, `assistant` | смешанная: `bank-bff` — с токеном пользователя (пользователь — проверенный `sub`; `user_id` запроса пуст или равен ему, иначе голый `INVALID_ARGUMENT`), `assistant` — системный вызов с обязательным `user_id` |
+| `analytics.MetricsIngestService/*` | `bank-statement-data` | системный |
+| `userdeletion.UserDeletionService/*` | `user` | системный |
+
+Обработчики FIN-283: `UpsertUserMetrics`, `ListPeriods` (`internal/adapter/grpc/metrics`) и `PurgeUserData` (`DeletionServer` библиотеки `go-tombstone`). `GetAnalytics` — FIN-5: зарегистрирован в составе `AnalyticsService` и до реализации отвечает `UNIMPLEMENTED`. Клиентов соседей и фоновых заданий, кроме обновления ключей identity, нет. Health и dev reflection принадлежат инфраструктурной сборке.
 
 Обработчики остаются в `internal/adapter/grpc/<feature>/`, usecase — в `internal/<feature>/`. Данные контекста читаются через `github.com/fin-assist/go-grpc/reqctx`; локального `internal/reqctx` нет. Ошибки контракта создаются через `finerr`; внутренние bare status создаёт только библиотека `go-grpc/server`. Запрет обхода `finerr` в `.golangci.yml` сохраняется.
 
 ## Identity и удалённые пользователи
 
-Сервис передаёт серверу реализации интерфейсов проверки сервисного и пользовательского токенов. В analytics подключение production identity остаётся явным TODO: `AUTH_MODE=verify` отказывает при старте до интеграции, а `insecure-dev` разрешён только при `ENV=dev` — и в `config.Load`, и в сборке `app.New` (FIN-275). Это не обход проверки в stage/prod.
+`AUTH_MODE=verify` (FIN-282) собирается одним конструктором `go-identity v0.2.0` `NewAssembly` (`internal/app/identity.go`, по образцу assistant): при `ENV=prod` — токены ServiceAccount Kubernetes (JWKS API-сервера по HTTPS с доверием только к `AUTH_KUBERNETES_CA_FILE`, отдельный API-токен, namespace и `sub`), исходящий токен — projected-файл `SERVICE_TOKEN_FILE`; при `ENV=stage` — короткие JWT стенда по файлам ключей `AUTH_STAGE_*`; в обоих — access JWT пользователя по ключам `user.GetSigningKeys` (`PEER_USER_ADDR`, повтор только этого метода, issuer/audience — `AUTH_USER_ISSUER`/`AUTH_USER_AUDIENCE`). `verify` с `ENV=dev` и любой неполный набор настроек — ошибка старта в `config.Load` и в `app.New`, без перехода на более слабый режим; ключи стенда в prod запрещены. Обновление кэшей ключей — задание `identity-keys` (`Assembly.Run`), соединение с `user` закрывается после остановки заданий. Второй цепочки аутентификации нет: сборка реализует `ServiceVerifier`, `UserVerifier` и `TokenSource` go-grpc. `insecure-dev` по-прежнему только при `ENV=dev` (FIN-275).
 
-`NoTombstones` остаётся временной явной реализацией каркаса analytics. Сервис с данными пользователей обязан заменить её интеграцией `go-tombstone` в `internal/app`; вынос transport-кода не реализует эту интеграцию автоматически.
+Удалённые пользователи — `go-tombstone v0.1.0`: `server.Deps.Tombstones` читает `tombstone_users` на primary без кэша на каждом пользовательском вызове (`TOKEN_REVOKED`, счётчик `finassist_tombstone_revoked_total`); пишущий сценарий `UpsertUserMetrics` берёт `Guard` в своей транзакции до записи и подтверждает опоздавшее событие удалённого пользователя без эффекта; `PurgeUserData` удаляет данные и ставит tombstone одной транзакцией (подробности — [schema.md](schema.md), «Удаление пользователя и tombstone»).
 
 ## Клиенты и задания
 
@@ -30,4 +38,12 @@
 
 Logger и Prometheus registry создаёт сервис и явно передаёт библиотекам. `go-grpc` не должен молча отключить прежние server/client metrics из-за nil metrics/registry; logger по умолчанию в библиотеке не заменяет сервисный logger. Имена и метки сохраняются: `grpc_server_handled_total{method,code,reason}`, `grpc_server_handling_seconds{method}`, `finassist_grpc_denied_total{method,caller,cause}`, `grpc_client_handled_total{peer,method,code}`, `grpc_client_handling_seconds{peer,method}`. Пользовательские идентификаторы и другие неограниченные значения в labels запрещены.
 
-`internal/logx` использует значения из `go-grpc/reqctx`. Логи не раскрывают токены, ключи, DSN и банковские данные; параметры маскирования и безопасного сообщения об ошибке задаёт контракт библиотеки. `/metrics`, `/healthz`, `/readyz` и readiness ping primary остаются в `internal/ops` и сборке сервиса. Смена зависимостей не добавляет новые метрики или process-wide logger/registry.
+Метрики FIN-330:
+
+| Метрика | Метки | Что |
+|---|---|---|
+| `finassist_incomplete_period_snapshots_total` | `period_type` (`month`, `quarter`, `year`) | периоды, которые `UpsertUserMetrics` применил с одним режимом переводов (grpc-api.md 7.3, 9); вместе с предупреждением в логе (тип и ключ периода, без пользователя) |
+| `finassist_tombstone_revoked_total` | — | пользовательские вызовы удалённого пользователя, отклонённые `TOKEN_REVOKED` (`go-tombstone`) |
+| `finassist_identity_rejected_total`, `finassist_identity_jwks_skipped_keys` | по README `go-identity` | отказы проверки токенов и пропущенные ключи JWKS (`go-identity`) |
+
+`internal/logx` использует значения из `go-grpc/reqctx`. Логи не раскрывают токены, ключи, DSN и банковские данные; параметры маскирования и безопасного сообщения об ошибке задаёт контракт библиотеки. `/metrics`, `/healthz`, `/readyz` и readiness ping primary остаются в `internal/ops` и сборке сервиса. Библиотеки регистрируют метрики только в переданном реестре; process-wide logger/registry нет.

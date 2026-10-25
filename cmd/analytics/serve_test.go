@@ -9,13 +9,17 @@ import (
 	"github.com/fin-assist/analytics/internal/testdb"
 )
 
+// AUTH_MODE=verify (the default) without the identity settings fails at configuration,
+// before any pool or listener: there is no weaker fallback.
 func TestUnitServeFailsBeforeConnectingWithoutVerifiers(t *testing.T) {
 	t.Setenv("SERVICE_NAME", "user")
 	t.Setenv("DB_PRIMARY_DSN", "postgres://nowhere.invalid/db")
 	t.Setenv("ENV", "prod")
 	err := runServe(t.Context())
-	if err == nil || !strings.Contains(err.Error(), "FIN-119") {
-		t.Fatalf("error %v", err)
+	for _, name := range []string{"AUTH_USER_ISSUER", "AUTH_USER_AUDIENCE", "PEER_USER_ADDR", "SERVICE_TOKEN_FILE"} {
+		if err == nil || !strings.Contains(err.Error(), name) {
+			t.Fatalf("error %v, want it to name %s", err, name)
+		}
 	}
 }
 
