@@ -1,16 +1,24 @@
-# Проверки и покрытие (FIN-238)
+# Проверки и покрытие (FIN-238 / FIN-257)
 
-Каждый существующий тест отнесён к одному из трёх наборов средствами имён Go. Состав тестов сохранён; бизнес-сервисы в этой задаче не реализуются.
+Каркас analytics использует выпущенные `go-grpc`, `go-migrate`, `go-worker` v0.1.0 и `go-postgres` v0.2.0. `AccessPolicy()` и `wire()` не регистрируют прикладных RPC, клиентов или jobs. Перенос инфраструктуры не реализует отсутствующий бизнес-функционал и не включает production identity/tombstones.
 
-| Набор | Выбор Go | Тестов верхнего уровня | Что проверяется |
-|---|---|---|---|
-| unit | `^TestUnit` | 44 | Изолированные правила, преобразования, конфигурация, валидация, обработка ошибок |
-| integration | `^TestIntegration` | 59 | PostgreSQL, миграции вверх/вниз/вверх, транзакции, схема, gRPC-сервер и клиенты, жизненный цикл, фоновые процессы |
-| api | `^TestAPI` | 1 | `apitest.Start`: полная сборка, gRPC health, неподдерживаемый метод |
+| Набор | Выбор Go | Что проверяется |
+|---|---|---|
+| Unit | `^TestUnit` | Изолированные конфигурация, CLI validation/exit codes, PostgreSQL routing/foreign transaction, порядок assembly/cleanup и shutdown через consumer interfaces без БД и сети |
+| Integration | `^TestIntegration` | Реальный PostgreSQL18: схема analytics, versioned upsert и snapshot round trip, up/down/up migration source, CLI up/version1/down/up/force1, транзакции/constraint mappings; настоящий transport, readiness и lifecycle сборки |
+| API | `^TestAPI` | Полная сборка с реальными миграциями analytics: gRPC health/reflection и отказ неизвестным RPC, CLI deployment и настоящие TCP/HTTP `/healthz`, `/readyz`, `/metrics`, выход при неверной конфигурации/bind failure, закрытие listeners и readiness при потере/восстановлении PostgreSQL |
 
-`TestAPIServiceStartsAndServes` обращается к полному приложению по gRPC с настоящим PostgreSQL. Тесты адаптера gRPC проверяют транспорт с тестовым сервисом, поэтому отнесены к integration. Чистые helpers `apitest.User`/`Caller`/`Reason` проверяются в unit. Тесты схемы вызывают PostgreSQL напрямую и не выдаются за API.
+Проверки схемы вызывают PostgreSQL напрямую и остаются integration; тестовые бизнес-RPC/SQL/jobs в runtime не добавлены. Существующие schema SQL и regressions транзакционного адаптера сохранены. Самостоятельные транспортные/runner/worker сценарии принадлежат тестам библиотек, а сервис проверяет их реальное подключение и собственный lifecycle.
 
-## Актуальный локальный замер 24.10.2026 (Go1.26.0 darwin/amd64)
+## PostgreSQL и общий знаменатель
+
+`internal/testdb` выбирает PostgreSQL18 из `TEST_DATABASE_URL` либо testcontainer. Публичный `go-migrate/migratetest.DSN(t, adminDSN)` создаёт отдельную БД и bounded cleanup; `CheckUpDownUp(t, dsn, source)` проверяет переданный реальный источник миграций. Ownership разделён: сервер принадлежит сервисному entrypoint, изолированная БД — DSN helper, источники SQL — приложению.
+
+`internal/testdb` и `internal/app/apitest` остаются production-пакетами в смысле Go coverage и входят в один полный знаменатель всех трёх наборов `-coverpkg=./...`, без исключений. Unit не обращается к БД/сети. Все collectors используют `-race -count=1 -timeout=8m`; execution/profile guards и independent total80 неизменны, combined только справочный. Команды и pinned analyzer v2.20.1 — [README](../README.md#покрытие-statements-по-трём-наборам-fin-238).
+
+Текущие native результаты FIN-257 публикуются в CI artifact `coverage`. Локальный прогон Go1.26.0/darwin с PostgreSQL18 через `TEST_DATABASE_URL` отличается от CI на Linux/Docker: контейнерная ветка testdb остаётся в знаменателе локально. Достижение трёх порогов подтверждает CI текущего SHA, а не импорт библиотек или исторический процент.
+
+## Исторический локальный замер до FIN-257 24.10.2026 (Go1.26.0 darwin/amd64)
 
 | Набор | Statements | Выполнение тестов | Порог 80% |
 |---|---|---|---|
@@ -21,8 +29,4 @@
 
 1015 statements во всех трёх профилях. Это замер после актуализации на FIN-240 и классификации с `-race -count=1 -timeout=8m -coverpkg=./...`, а не подтверждение завершения FIN-238. Старые метрики строк сюда не переносились. Целевой 80% применяется к каждому набору; код и тестовая инфраструктура из знаменателя не исключались. Недостаток покрытия не скрывается и не заполняется искусственными тестами ради процентов.
 
-`AccessPolicy` и `wire` ещё не реализуют бизнес-RPC сервиса. API-набор проверяет инфраструктуру, но не бизнес-сценарии. Их реализация остаётся в задачах разработки сервиса. До реализации и достаточных содержательных тестов обязательный CI gate остаётся красным; дефициты каждого набора остаются явно видны в CI.
-
-Команды, версия инструмента, одинаковый знаменатель, проверка пустого/неисполненного набора и артефакты описаны в [README](../README.md#покрытие-statements-по-трём-наборам-fin-238). Процент statements не доказывает полноту сценариев; проверка через тестовый gRPC-сервер не подтверждает работу с развёрнутыми соседними сервисами.
-
-После актуализации на main с FIN-240 сохранены adapter/constraint mappings и все новые тесты go-postgres. Транспортные/PG проверки относятся к integration; изолированные routing/rejected-query contracts — к unit. Бизнес-RPC по-прежнему отсутствуют.
+Прикладные `AnalyticsService`, `MetricsIngestService` и `UserDeletionService` остаются отдельными задачами. Зелёное инфраструктурное покрытие не подтверждает реализацию этих RPC и их контрактных сценариев.

@@ -1,9 +1,10 @@
 package app
 
 import (
-	"github.com/fin-assist/analytics/internal/adapter/grpc/server"
-	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate"
-	"github.com/fin-assist/analytics/internal/worker"
+	"github.com/fin-assist/go-grpc/server"
+	"github.com/fin-assist/go-migrate"
+	"github.com/fin-assist/go-worker"
+
 	"github.com/fin-assist/analytics/migrations"
 )
 

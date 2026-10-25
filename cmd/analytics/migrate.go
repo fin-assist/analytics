@@ -7,7 +7,8 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate"
+	"github.com/fin-assist/go-migrate"
+
 	"github.com/fin-assist/analytics/internal/app"
 	"github.com/fin-assist/analytics/internal/config"
 )
