@@ -30,7 +30,8 @@ const (
 type AuthMode string
 
 const (
-	// AuthVerify checks JWT and ServiceAccount tokens (library of FIN-119).
+	// AuthVerify checks user JWTs and service tokens through go-identity NewAssembly:
+	// Kubernetes ServiceAccounts with ENV=prod, signed stage key files with ENV=stage.
 	AuthVerify AuthMode = "verify"
 	// AuthInsecureDev trusts "Bearer dev:<name>" tokens; allowed only with ENV=dev.
 	AuthInsecureDev AuthMode = "insecure-dev"
@@ -82,6 +83,8 @@ type AuthConfig struct {
 	Mode AuthMode
 	// ServiceTokenFile holds this service's ServiceAccount token, presented on outgoing calls.
 	ServiceTokenFile string
+	// Identity pins the trusted issuers, audiences and key sources of AuthVerify.
+	Identity IdentityConfig
 }
 
 // Load reads the configuration from the process environment.
@@ -140,6 +143,7 @@ func load(getenv func(string) string, readFile func(string) ([]byte, error), env
 		Auth: AuthConfig{
 			Mode:             AuthMode(r.str("AUTH_MODE")),
 			ServiceTokenFile: r.str("SERVICE_TOKEN_FILE"),
+			Identity:         r.identity(),
 		},
 		Peers:           map[string]string{},
 		ShutdownDelay:   r.duration("SHUTDOWN_DELAY"),
@@ -190,6 +194,7 @@ func (c Config) validate() []error {
 	default:
 		errs = append(errs, fmt.Errorf("AUTH_MODE=%q, want verify or insecure-dev", c.Auth.Mode))
 	}
+	errs = append(errs, c.validateIdentity()...)
 	return errs
 }
 

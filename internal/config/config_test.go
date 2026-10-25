@@ -23,7 +23,7 @@ func env(vars map[string]string) (func(string) string, func() []string) {
 func noFiles(string) ([]byte, error) { return nil, fs.ErrNotExist }
 
 func base() map[string]string {
-	return map[string]string{"SERVICE_NAME": "user", "DB_PRIMARY_DSN": "postgres://primary/user"}
+	return map[string]string{"SERVICE_NAME": "user", "DB_PRIMARY_DSN": "postgres://primary/user", "AUTH_USER_ISSUER": "https://user.example", "AUTH_USER_AUDIENCE": "finassist", "SERVICE_TOKEN_FILE": "/internal-token", "PEER_USER_ADDR": "dns:///user:9090"}
 }
 
 func TestUnitDefaults(t *testing.T) {
@@ -107,7 +107,7 @@ func TestUnitPeers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Peers["bank-statement-data"] == "" || c.Peers["analytics"] != "127.0.0.1:9093" || len(c.Peers) != 2 {
+	if c.Peers["bank-statement-data"] == "" || c.Peers["analytics"] != "127.0.0.1:9093" || c.Peers["user"] == "" || len(c.Peers) != 3 {
 		t.Fatalf("peers %v", c.Peers)
 	}
 }

@@ -13,19 +13,6 @@ import (
 	"github.com/fin-assist/analytics/internal/config"
 )
 
-// Outside dev the service refuses to start until real verifiers are wired (FIN-119),
-// instead of serving with identities nobody checks.
-func TestUnitIdentityFailsClosed(t *testing.T) {
-	_, _, _, err := identity(config.Config{Service: "user", Env: config.EnvProd, Auth: config.AuthConfig{Mode: config.AuthVerify}})
-	if err == nil || !strings.Contains(err.Error(), "FIN-119") {
-		t.Fatalf("error %v", err)
-	}
-	s, u, tok, err := identity(config.Config{Service: "user", Env: config.EnvDev, Auth: config.AuthConfig{Mode: config.AuthInsecureDev}})
-	if err != nil || s == nil || u == nil || tok == nil {
-		t.Fatalf("dev: %v", err)
-	}
-}
-
 // The dev-only gate holds for callers of New that bypass config.Load (apitest, a
 // hand-built Config): unverified identities are refused before any pool is opened.
 func TestUnitInsecureDevRefusedOutsideDevWithoutConfigLoad(t *testing.T) {
@@ -33,15 +20,15 @@ func TestUnitInsecureDevRefusedOutsideDevWithoutConfigLoad(t *testing.T) {
 		t.Run(string(env), func(t *testing.T) {
 			cfg := config.Config{Service: "analytics", Env: env, Auth: config.AuthConfig{Mode: config.AuthInsecureDev},
 				DB: config.DBConfig{PrimaryDSN: "primary", MaxConns: 1}}
-			s, u, tok, err := identity(cfg)
-			if err == nil || s != nil || u != nil || tok != nil || !strings.Contains(err.Error(), "only with ENV=dev") {
+			id, err := identity(cfg, prometheus.NewRegistry(), nil)
+			if err == nil || id.Services != nil || id.Users != nil || id.Tokens != nil || !strings.Contains(err.Error(), "requires ENV=dev") {
 				t.Fatalf("insecure identities accepted in %q: %v", env, err)
 			}
 			opened := false
 			a, err := assemble(t.Context(), cfg, slog.New(slog.DiscardHandler), prometheus.NewRegistry(), func(context.Context, postgres.Options) (*postgres.DB, error) {
 				opened = true
 				return nil, errors.New("must not open")
-			})
+			}, nil)
 			if a != nil || err == nil || opened {
 				t.Fatalf("assembly in %q: app=%v opened=%v err=%v", env, a != nil, opened, err)
 			}

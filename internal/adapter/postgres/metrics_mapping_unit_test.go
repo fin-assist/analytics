@@ -1,8 +1,8 @@
-package migrations_test
+package postgres
 
-// Unit tests of the PeriodSnapshot ↔ rows mapping (snapshot_rows_test.go) without PostgreSQL:
+// Unit tests of the PeriodSnapshot ↔ rows mapping (metrics.go, metrics_read_test.go) without PostgreSQL:
 // the enum range checks at their exact bounds, the refusals of each mapper and the checks of a
-// header on read. The round trip through the tables is in schema_test.go.
+// header on read. The round trip through the tables is in metrics_schema_test.go.
 
 import (
 	"errors"
@@ -15,7 +15,26 @@ import (
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
 	commonv1 "github.com/fin-assist/contracts/gen/go/finassist/common/v1"
 	"google.golang.org/protobuf/proto"
+
+	metricsgrpc "github.com/fin-assist/analytics/internal/adapter/grpc/metrics"
+	"github.com/fin-assist/analytics/internal/domain"
 )
+
+// dom converts a protobuf snapshot the way the handler does, without validating it.
+func dom(t *testing.T, s *analyticsv1.PeriodSnapshot) domain.Snapshot {
+	t.Helper()
+	d, err := metricsgrpc.SnapshotOf(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+// domMetric converts one MetricSnapshot the way the handler does.
+func domMetric(t *testing.T, ms *analyticsv1.MetricSnapshot) domain.Metric {
+	t.Helper()
+	return dom(t, &analyticsv1.PeriodSnapshot{Metrics: []*analyticsv1.MetricSnapshot{ms}}).Metrics[0]
+}
 
 func TestUnitSmallintOf(t *testing.T) {
 	cases := []struct {
@@ -76,7 +95,7 @@ func TestUnitMetricOfRefusesEnumsOutOfRange(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			m := &analyticsv1.Metric{Status: analyticsv1.MetricStatus_METRIC_STATUS_READY}
 			change(m)
-			_, err := metricOf(pk(month, "2026-09", withTransfers), &analyticsv1.MetricSnapshot{MetricId: "tiles.expense", Metric: m})
+			_, err := metricOf(pk(month, "2026-09", withTransfers), domMetric(t, &analyticsv1.MetricSnapshot{MetricId: "tiles.expense", Metric: m}))
 			if !errors.Is(err, errEnumRange) {
 				t.Fatalf("error %v, want %v", err, errEnumRange)
 			}
@@ -88,7 +107,7 @@ func TestUnitMetricOfRefusesEnumsOutOfRange(t *testing.T) {
 		Lock:    &analyticsv1.MetricLock{Reason: analyticsv1.LockReason_LOCK_REASON_NEED_FULL_MONTHS, Text: "не хранится"},
 		Filters: &commonv1.OperationsFilter{From: at(start), To: at(end), TransferMode: commonv1.TransferMode_TRANSFER_MODE_WITHOUT},
 	}
-	r, err := metricOf(pk(month, "2026-09", withTransfers), &analyticsv1.MetricSnapshot{MetricId: "tiles.expense", Metric: m})
+	r, err := metricOf(pk(month, "2026-09", withTransfers), domMetric(t, &analyticsv1.MetricSnapshot{MetricId: "tiles.expense", Metric: m}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +119,11 @@ func TestUnitMetricOfRefusesEnumsOutOfRange(t *testing.T) {
 func TestUnitHeaderOfRefusesCoverageOutOfRange(t *testing.T) {
 	s := snapshot(month, "2026-09", withTransfers, 1)
 	s.Bounds.Coverage = commonv1.Coverage(math.MaxInt16 + 1)
-	if _, err := headerOf(s); !errors.Is(err, errEnumRange) {
+	if _, err := headerOf(dom(t, s)); !errors.Is(err, errEnumRange) {
 		t.Fatalf("error %v, want %v", err, errEnumRange)
 	}
 	s.Bounds.Coverage = commonv1.Coverage_COVERAGE_COMPLETE
-	h, err := headerOf(s)
+	h, err := headerOf(dom(t, s))
 	if err != nil || *h.coverage != complete || h.removed {
 		t.Fatalf("header %+v, %v", h, err)
 	}
@@ -125,7 +144,7 @@ func TestUnitHeaderOfRefusesSnapshotWithoutData(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s := snapshot(month, "2026-09", withTransfers, 1)
 			change(s)
-			if _, err := headerOf(s); !errors.Is(err, errBrokenHeader) {
+			if _, err := headerOf(dom(t, s)); !errors.Is(err, errBrokenHeader) {
 				t.Fatalf("error %v, want %v", err, errBrokenHeader)
 			}
 		})
@@ -141,11 +160,11 @@ func TestUnitMappingRoundTrip(t *testing.T) {
 		"complete, no metrics and gaps":          completeSnapshotWithoutMetrics(),
 	} {
 		t.Run(name, func(t *testing.T) {
-			h, err := headerOf(in)
+			h, err := headerOf(dom(t, in))
 			if err != nil {
 				t.Fatal(err)
 			}
-			gaps, err := gapsOf(in)
+			gaps, err := gapsOf(dom(t, in))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -155,7 +174,7 @@ func TestUnitMappingRoundTrip(t *testing.T) {
 			}
 			var metrics []metricRow
 			for _, ms := range in.GetMetrics() {
-				r, err := metricOf(keyOf(in), ms)
+				r, err := metricOf(protoKey(in), domMetric(t, ms))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -163,7 +182,7 @@ func TestUnitMappingRoundTrip(t *testing.T) {
 			}
 			// The read returns metrics in metric_id order (ORDER BY in readAnalyticsSQL).
 			slices.SortFunc(metrics, func(a, b metricRow) int { return strings.Compare(a.metricID, b.metricID) })
-			got, err := snapshotOf(keyOf(in), h, starts, ends, metrics)
+			got, err := snapshotOf(protoKey(in), h, starts, ends, metrics)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -195,17 +214,17 @@ func TestUnitGapsOf(t *testing.T) {
 	for range math.MaxInt16 + 1 {
 		s.Bounds.Gaps = append(s.Bounds.Gaps, day)
 	}
-	gaps, err := gapsOf(s)
+	gaps, err := gapsOf(dom(t, s))
 	if err != nil || len(gaps) != math.MaxInt16+1 || gaps[len(gaps)-1].ordinal != math.MaxInt16 {
 		t.Fatalf("32768 gaps: %d, %v", len(gaps), err)
 	}
 	s.Bounds.Gaps = append(s.Bounds.Gaps, day)
-	if _, err := gapsOf(s); err == nil {
+	if _, err := gapsOf(dom(t, s)); err == nil {
 		t.Fatal("32769 gaps mapped, want an error")
 	}
 
 	s.Bounds.Gaps = []*commonv1.TimeRange{{Start: day.GetStart()}}
-	gaps, err = gapsOf(s)
+	gaps, err = gapsOf(dom(t, s))
 	if err != nil || gaps[0].start == nil || gaps[0].end != nil {
 		t.Fatalf("gap without its end: %+v, %v; want end NULL", gaps, err)
 	}
@@ -215,7 +234,7 @@ func TestUnitGapsOf(t *testing.T) {
 func TestUnitSnapshotOfRefusesBrokenHeader(t *testing.T) {
 	key := pk(month, "2026-09", withTransfers)
 	valid := func() headerRow {
-		h, err := headerOf(snapshot(month, "2026-09", withTransfers, 1))
+		h, err := headerOf(dom(t, snapshot(month, "2026-09", withTransfers, 1)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -246,7 +265,7 @@ func TestUnitSnapshotOfRefusesBrokenHeader(t *testing.T) {
 
 // Details that are not protojson of a Metric fail the read with the metric named.
 func TestUnitSnapshotOfRefusesBrokenDetails(t *testing.T) {
-	h, err := headerOf(snapshot(month, "2026-09", withTransfers, 1))
+	h, err := headerOf(dom(t, snapshot(month, "2026-09", withTransfers, 1)))
 	if err != nil {
 		t.Fatal(err)
 	}

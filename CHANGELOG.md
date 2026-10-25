@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- `MetricsIngestService.UpsertUserMetrics`: проверка всего пакета по правилам «Инвариантов в коде сервиса» (`internal/domain`, голый `INVALID_ARGUMENT`, в том числе для `METRIC_STATUS_UNAVAILABLE` от производителя и периода и в снимках, и в удалениях), одна транзакция READ COMMITTED: tombstone guard, состояние, заголовки и метки, пропуски и метрики применённых ключей; удаление периода сравнивается с бо́льшей из версий двух режимов, версия метки только растёт; `lock.text` производителя игнорируется; `user_id` на границе приводится к каноническому нижнему регистру UUID, чтобы вызовы одного пользователя в разном регистре сериализовались на одном tombstone guard и совпадали с `sub`; период с одним режимом — предупреждение и `finassist_incomplete_period_snapshots_total{period_type}`. `AnalyticsService.ListPeriods` (смешанная модель: `bank-bff` с токеном пользователя, `assistant` с `user_id`) и `UserDeletionService.PurgeUserData` (`go-tombstone`); строки `AccessPolicy()` по grpc-api.md 3.3. `GetAnalytics` — FIN-5, отвечает `UNIMPLEMENTED` (FIN-283).
+- `AUTH_MODE=verify` через `go-identity v0.2.0` `NewAssembly`: `ENV=prod` — ServiceAccount Kubernetes, `ENV=stage` — файлы ключей стенда, JWT пользователя — по ключам `user.GetSigningKeys`; новые переменные `AUTH_USER_*`, `AUTH_KUBERNETES_*`, `AUTH_STAGE_*`, обязательный `PEER_USER_ADDR`; `verify` при `ENV=dev` и неполные настройки — ошибка старта. `go-tombstone v0.1.0` вместо `NoTombstones`: источник миграций `tombstone` перед сервисным, `TOKEN_REVOKED` удалённому пользователю на любой вызов (FIN-282).
+
 ### Изменено
+
+- `go-grpc` v0.1.0 → v0.2.0: вызов смешанного метода от `bank-bff` без проверенного токена пользователя получает `INVALID_TOKEN`, а не системный вариант с `user_id` из запроса (FIN-299, нужен для `ListPeriods`). Предложенные в FIN-113 запросы записи и отображение снимка перенесены из тестов `migrations/` в репозиторий `internal/adapter/postgres/metrics.go`, тесты схемы — в тот же пакет; `ListPeriods` читает пояс и периоды одним оператором (FIN-283).
+- `make test-names` проверяет и fuzz-цели (`FuzzUnit…`/`FuzzIntegration…`/`FuzzAPI…`, seed-корпус — в своём наборе) и отклоняет `Example…`; сборщики выбирают `^(Test|Fuzz)<Suite>` (FIN-290, перенос go-service-template#26).
 
 - Документация приведена к шаблону и решениям: правило FIN-195 о нарушениях ограничений и полное правило схемы FIN-194 в `AGENTS.md`, актуальный статус `go-tombstone` в `docs/schema.md`, описание `GRPC_MAX_RECV_MSG_SIZE` по контракту analytics, ссылки README на задачи неподключённых RPC и identity/tombstone. Поведение сервиса не менялось (FIN-280).
 

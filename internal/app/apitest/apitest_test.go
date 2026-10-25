@@ -14,8 +14,8 @@ import (
 	"github.com/fin-assist/analytics/internal/config"
 )
 
-// The analytics scaffold registers no business RPC, so its current API test is the
-// assembly itself: it starts, is healthy and refuses what it does not serve.
+// The assembly starts, is healthy and refuses what it does not serve; the business RPCs
+// have their own API tests in internal/app (metrics_api_test.go).
 func TestAPIServiceStartsAndServes(t *testing.T) {
 	env := Start(t)
 	resp, err := healthpb.NewHealthClient(env.Conn).Check(t.Context(), &healthpb.HealthCheckRequest{})
@@ -46,8 +46,16 @@ func TestAPIDevReflectionUsesConfiguredWholeAssembly(t *testing.T) {
 	for _, service := range response.GetListServicesResponse().GetService() {
 		services[service.GetName()] = true
 	}
-	if len(services) != 3 || !services["grpc.health.v1.Health"] || !services["grpc.reflection.v1.ServerReflection"] || !services["grpc.reflection.v1alpha.ServerReflection"] {
-		t.Fatalf("unexpected operational services: %v", services)
+	want := []string{"finassist.analytics.v1.AnalyticsService", "finassist.analytics.v1.MetricsIngestService",
+		"finassist.userdeletion.v1.UserDeletionService", "grpc.health.v1.Health",
+		"grpc.reflection.v1.ServerReflection", "grpc.reflection.v1alpha.ServerReflection"}
+	if len(services) != len(want) {
+		t.Fatalf("unexpected services: %v", services)
+	}
+	for _, name := range want {
+		if !services[name] {
+			t.Fatalf("service %s is not served: %v", name, services)
+		}
 	}
 	_, err = healthpb.NewHealthClient(env.Conn).Check(Caller(t.Context(), "assistant"), &healthpb.HealthCheckRequest{Service: "not-registered"})
 	if status.Code(err) != codes.NotFound || Reason(err) != "" {
