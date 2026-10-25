@@ -31,6 +31,9 @@ type Readiness struct {
 	mu       sync.Mutex
 	ready    bool
 	draining bool
+	// beforeDrainLock, set only by tests, runs right before Drain takes mu: it marks
+	// the point where Drain starts waiting for an in-flight notification.
+	beforeDrainLock func()
 }
 
 // Ready reports the last result; false after Drain.
@@ -44,6 +47,9 @@ func (r *Readiness) Ready() bool {
 // balancers stop sending new requests during SHUTDOWN_DELAY. It is irreversible and
 // waits for an onChange that Watch has already started.
 func (r *Readiness) Drain() {
+	if r.beforeDrainLock != nil {
+		r.beforeDrainLock()
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.draining = true

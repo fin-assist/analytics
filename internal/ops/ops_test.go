@@ -90,11 +90,13 @@ func TestUnitDrainKeepsReadinessDownWhileTheCheckPasses(t *testing.T) {
 	<-done
 }
 
-// An onChange(true) already in flight when Drain is called finishes before Drain
-// returns; nothing reports ready afterwards (the race found in review of FIN-275).
-func TestUnitDrainWaitsForInFlightReadyNotification(t *testing.T) {
-	r := &Readiness{}
-	entered, release := make(chan struct{}), make(chan struct{})
+// drainDuringNotification calls Drain while Watch is held inside a ready notification
+// (by block, which must close entered and wait for release) and returns the order of
+// the delivered ready notification and Drain's return. Watch is released only once
+// Drain has reached its lock (beforeDrainLock); a Drain that returns without taking
+// it fails the test before release. No timers decide the interleaving.
+func drainDuringNotification(t *testing.T, r *Readiness, log *slog.Logger, entered <-chan struct{}, release chan struct{}, onChange func(bool)) []string {
+	t.Helper()
 	var (
 		mu     sync.Mutex
 		events []string
@@ -105,24 +107,25 @@ func TestUnitDrainWaitsForInFlightReadyNotification(t *testing.T) {
 	watched := make(chan struct{})
 	go func() {
 		defer close(watched)
-		first := true
-		r.Watch(ctx, time.Millisecond, slog.New(slog.DiscardHandler), func(context.Context) error { return nil }, func(ok bool) {
-			if first {
-				first = false
-				close(entered)
-				<-release
-			}
+		r.Watch(ctx, time.Millisecond, log, func(context.Context) error { return nil }, func(ok bool) {
+			onChange(ok)
 			if ok {
 				record("ready")
 			}
 		})
 	}()
 	<-entered
+	waiting := make(chan struct{})
+	r.beforeDrainLock = func() { close(waiting) }
 	drained := make(chan struct{})
 	go func() { r.Drain(); record("drained"); close(drained) }()
 	select {
-	case <-drained: // a correct Drain cannot return here: Watch holds the lock
-	case <-time.After(200 * time.Millisecond):
+	case <-waiting: // Drain now waits for the lock Watch holds during the notification
+	case <-drained:
+		close(release)
+		cancel()
+		<-watched
+		t.Fatal("Drain returned while a ready notification was in flight")
 	}
 	close(release)
 	<-drained
@@ -130,11 +133,20 @@ func TestUnitDrainWaitsForInFlightReadyNotification(t *testing.T) {
 	<-watched
 	mu.Lock()
 	defer mu.Unlock()
-	if len(events) != 2 || events[0] != "ready" || events[1] != "drained" {
-		t.Fatalf("events %v, want [ready drained]: Drain returned before the in-flight notification", events)
-	}
-	if r.Ready() {
-		t.Fatal("ready after drain")
+	return append([]string(nil), events...)
+}
+
+// An onChange(true) already in flight when Drain is called finishes before Drain
+// returns; nothing reports ready afterwards (the race found in review of FIN-275).
+func TestUnitDrainWaitsForInFlightReadyNotification(t *testing.T) {
+	r := &Readiness{}
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	events := drainDuringNotification(t, r, slog.New(slog.DiscardHandler), entered, release, func(bool) {
+		once.Do(func() { close(entered); <-release })
+	})
+	if len(events) != 2 || events[0] != "ready" || events[1] != "drained" || r.Ready() {
+		t.Fatalf("events %v ready=%v, want [ready drained] and not ready", events, r.Ready())
 	}
 }
 
@@ -159,35 +171,7 @@ func (h blockingHandler) Handle(ctx context.Context, rec slog.Record) error {
 func TestUnitDrainDuringReadyLogDeliversNoLateReady(t *testing.T) {
 	r := &Readiness{}
 	h := blockingHandler{Handler: slog.DiscardHandler, entered: make(chan struct{}), release: make(chan struct{}), once: &sync.Once{}}
-	var (
-		mu     sync.Mutex
-		events []string
-	)
-	record := func(e string) { mu.Lock(); events = append(events, e); mu.Unlock() }
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	watched := make(chan struct{})
-	go func() {
-		defer close(watched)
-		r.Watch(ctx, time.Millisecond, slog.New(h), func(context.Context) error { return nil }, func(ok bool) {
-			if ok {
-				record("ready")
-			}
-		})
-	}()
-	<-h.entered
-	drained := make(chan struct{})
-	go func() { r.Drain(); record("drained"); close(drained) }()
-	select {
-	case <-drained:
-	case <-time.After(200 * time.Millisecond):
-	}
-	close(h.release)
-	<-drained
-	cancel()
-	<-watched
-	mu.Lock()
-	defer mu.Unlock()
+	events := drainDuringNotification(t, r, slog.New(h), h.entered, h.release, func(bool) {})
 	if len(events) != 2 || events[0] != "ready" || events[1] != "drained" || r.Ready() {
 		t.Fatalf("events %v ready=%v: a ready notification arrived after Drain returned", events, r.Ready())
 	}
