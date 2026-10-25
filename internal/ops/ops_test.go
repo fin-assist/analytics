@@ -91,10 +91,13 @@ func TestUnitDrainKeepsReadinessDownWhileTheCheckPasses(t *testing.T) {
 }
 
 // drainDuringNotification calls Drain while Watch is held inside a ready notification
-// (by block, which must close entered and wait for release) and returns the order of
-// the delivered ready notification and Drain's return. Watch is released only once
-// Drain has reached its lock (beforeDrainLock); a Drain that returns without taking
-// it fails the test before release. No timers decide the interleaving.
+// (entered is closed there; the notification waits for release) and returns the order
+// of the delivered ready notification and Drain's return. Watch is released only once
+// Drain has reached its lock (beforeDrainLock), so on the fixed code the interleaving
+// is deterministic: Drain waits for the lock Watch holds and returns after "ready".
+// A Drain that does not wait for the lock is caught with very high probability, not
+// independently of the scheduler: it usually returns before the released Watch
+// records "ready", and the callers' order check fails. No timer decides anything.
 func drainDuringNotification(t *testing.T, r *Readiness, log *slog.Logger, entered <-chan struct{}, release chan struct{}, onChange func(bool)) []string {
 	t.Helper()
 	var (
