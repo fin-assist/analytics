@@ -23,11 +23,19 @@ func NewRegistry() *prometheus.Registry {
 	return reg
 }
 
-// Readiness keeps the last result of the readiness check.
-type Readiness struct{ ready atomic.Bool }
+// Readiness keeps the last result of the readiness check. Once Drain is called the
+// process is shutting down and stays not ready for good, whatever the check says.
+type Readiness struct{ ready, draining atomic.Bool }
 
-// Ready reports the last result.
-func (r *Readiness) Ready() bool { return r.ready.Load() }
+// Ready reports the last result; false after Drain.
+func (r *Readiness) Ready() bool { return r.ready.Load() && !r.draining.Load() }
+
+// Drain marks the process as shutting down: /readyz answers 503 from now on, so
+// balancers stop sending new requests during SHUTDOWN_DELAY. It is irreversible.
+func (r *Readiness) Drain() {
+	r.draining.Store(true)
+	r.ready.Store(false)
+}
 
 // Watch runs check every interval until ctx ends and calls onChange when the result flips.
 func (r *Readiness) Watch(ctx context.Context, interval time.Duration, log *slog.Logger, check func(context.Context) error, onChange func(bool)) {
@@ -40,7 +48,7 @@ func (r *Readiness) Watch(ctx context.Context, interval time.Duration, log *slog
 		if ctx.Err() != nil {
 			return
 		}
-		ok := err == nil
+		ok := err == nil && !r.draining.Load()
 		if r.ready.Swap(ok) != ok || first {
 			if !ok {
 				log.WarnContext(ctx, "not ready", "error", err)

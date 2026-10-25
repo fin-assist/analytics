@@ -112,6 +112,25 @@ func TestUnitPeers(t *testing.T) {
 	}
 }
 
+// A pool size beyond int32 used to wrap around (4294967297 became 1) and pass the
+// positivity check; it is a configuration error instead.
+func TestUnitMaxConnsOutsideInt32IsRejected(t *testing.T) {
+	for _, v := range []string{"4294967297", "2147483648", "-2147483649", "99999999999999999999"} {
+		vars := base()
+		vars["DB_MAX_CONNS"] = v
+		get, list := env(vars)
+		if c, err := load(get, noFiles, list); err == nil || !strings.Contains(err.Error(), "DB_MAX_CONNS") {
+			t.Fatalf("DB_MAX_CONNS=%s accepted as %d: %v", v, c.DB.MaxConns, err)
+		}
+	}
+	vars := base()
+	vars["DB_MAX_CONNS"] = "2147483647"
+	get, list := env(vars)
+	if c, err := load(get, noFiles, list); err != nil || c.DB.MaxConns != 2147483647 {
+		t.Fatalf("max int32: %d %v", c.DB.MaxConns, err)
+	}
+}
+
 func TestUnitErrorsAreJoined(t *testing.T) {
 	get, list := env(map[string]string{"ENV": "qa", "DB_MAX_CONNS": "x", "SHUTDOWN_DELAY": "-1s"})
 	_, err := load(get, noFiles, list)
