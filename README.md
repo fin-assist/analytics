@@ -18,8 +18,8 @@
 
 ## Что ещё не подключено
 
-- Обработчики `AnalyticsService`, `MetricsIngestService`, `UserDeletionService` и их строки в `AccessPolicy()` — отдельными задачами (FIN-5 и следующие).
-- Tombstone — `NoTombstones` до отдельного подключения `go-tombstone` ([FIN-110](https://finassist.youtrack.cloud/issue/FIN-110)); его миграции встают в `MigrationSources()` перед источником сервиса.
+- Обработчики `AnalyticsService`, `MetricsIngestService`, `UserDeletionService` и их строки в `AccessPolicy()` — отдельными задачами: сборка экрана `GetAnalytics` — [FIN-5](https://finassist.youtrack.cloud/issue/FIN-5), `UpsertUserMetrics`, `ListPeriods`, `PurgeUserData` — [FIN-283](https://finassist.youtrack.cloud/issue/FIN-283).
+- Identity и tombstone — `AUTH_MODE=verify` не стартует, `NoTombstones` до подключения выпущенных `go-identity v0.1.0` и `go-tombstone v0.1.0` ([FIN-282](https://finassist.youtrack.cloud/issue/FIN-282)); миграции `go-tombstone` встают в `MigrationSources()` перед источником сервиса.
 - Секрет `CLAUDE_CODE_OAUTH_TOKEN`, Claude GitHub App и Codex на репозитории — настраивает владелец.
 
 ## Раскладка

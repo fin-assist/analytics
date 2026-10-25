@@ -130,7 +130,7 @@ Priorities when they pull apart, in this order:
   code through `bare()` in the server package. A new client reaction needs a new code in `contracts` first. A
   handler may return a `finerr` error wrapped with `%w` or any other error: the interceptor sends the caller the
   unwrapped status or a bare `INTERNAL` (`CANCELLED` / `DEADLINE_EXCEEDED` for context errors) and logs the
-  original, so no text of a wrapped error leaves the process (`docs/server.md`, step 10).
+  original, so no text of a wrapped error leaves the process (the tagged `go-grpc/server` contract linked from `docs/server.md`).
 - Identity: the user of a user call is `reqctx.UserID(ctx)` (the verified `sub`), never a request field; a system
   call takes `user_id` from the request. Every new method gets its row in `AccessPolicy()`, copied from
   grpc-api.md 3.3; the server does not start without it.
@@ -141,6 +141,12 @@ Priorities when they pull apart, in this order:
   first". Parameterize values; keep identifiers and structural fragments constant or from an explicit allowlist.
   Use `PlaceholderFormat(sq.Dollar)` for PostgreSQL builders. If a dynamic query cannot be expressed by the
   builder, explain the limitation beside its manual construction and preserve parameterization.
+- Constraint errors (FIN-195): go-postgres owns the transaction mechanism. Adapters define one
+  operation-specific mapper on the outer RunMapped, matching both SQLSTATE and constraint name;
+  usecases see only domain errors and translate them with finerr per the method contract. Never
+  install a global mapping or parse pgconn in a usecase. Deferred errors are mapped at actual COMMIT;
+  nested work uses Run, not another mapper. Unknown violations remain INTERNAL. Never copy PgError.Detail
+  or wrap the raw PgError into a domain error. See docs/migrations.md and mapping_test.go.
 - Database: SQL with parameters only (`$1`), table and column names are constants. A usecase opens the transaction
   with `db.Run`; repositories take `db.Writer(ctx)` / `db.Reader(ctx)`; no calls to other services inside `Run`.
   `DB` delegates transactions to one `go-postgres` Manager per primary pool. Operation-specific constraint-to-domain
@@ -148,12 +154,21 @@ Priorities when they pull apart, in this order:
   contexts are rejected by the manager and by Writer/Reader, never silently sent to a pool. No production mappings
   or business RPCs are invented for the current analytics scaffold.
   Migrations follow `docs/migrations.md` (two releases for an incompatible change, `CONCURRENTLY` alone in a file).
-  The schema holds only primary keys, unique constraints and indexes (partial ones included), foreign keys with
-  their cascades, `NOT NULL` and `DEFAULT`: no `CHECK`, `EXCLUDE`, triggers or stored functions (owner's decision
-  of 19.10.2026, FIN-194; `docs/migrations.md`, «Что можно в схеме»; Confluence «Архитектура» → «Миграции и
-  доступ к БД» → «Что можно в схеме БД»). Value
-  and state rules live in the service code; `docs/schema.md`, «Инварианты в коде сервиса», lists them, and a new
-  rule adds its row there with its test.
+- No validation or logic in the schema (owner's decision of 19.10.2026, FIN-194; `docs/migrations.md`, «Что можно
+  в схеме»; Confluence «Архитектура» → «Миграции и доступ к БД» → «Что можно в схеме БД»): allowed are
+  `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY` with any `ON DELETE` / `ON UPDATE` action (`SET DEFAULT` included),
+  `NOT NULL`, `DEFAULT`, indexes (unique, partial and expression ones included) and generated columns
+  `GENERATED ALWAYS AS (…) STORED` (a value computed for storage or search, not validation); an identity column
+  (`GENERATED ALWAYS AS IDENTITY`) is a key and is allowed too. Not allowed: `CHECK`, `EXCLUDE`, triggers, stored
+  functions or procedures, domains with constraints. Value and state rules live in the service code;
+  `docs/schema.md`, «Инварианты в коде сервиса», lists them, and a new rule adds its row there with its test.
+  DDL inside a migration (a `DO` block creating initial partitions, `RAISE EXCEPTION` in an irreversible down
+  file) runs once and is allowed.
+  A cross-row invariant (a former `EXCLUDE`, «one active row», non-overlapping intervals) is expressed by a unique
+  index where possible (a partial `UNIQUE`, for example); otherwise code checks it under a lock in the same `db.Run`
+  — `SELECT … FOR UPDATE` of the parent row or a transaction-level advisory lock, `pg_advisory_xact_lock(key)`
+  (released on `COMMIT` / `ROLLBACK`; a session `pg_advisory_lock` would stay on the pooled connection) — and an
+  integration test with two concurrent writers on PostgreSQL covers it.
 - Clients of other services: `client.Dial` with `Retry` listing only reads and methods idempotent by construction;
   the context carries the deadline.
 - Time: "now" in business logic comes from an injected clock (`func() time.Time` or an interface passed by `wire()`),
@@ -370,7 +385,9 @@ security-relevant behaviour has negative tests.
 - A new query by object ID is scoped by the user and has a test with another user's ID.
 - A new effect with an idempotency record or an outbox row is written in one `db.Run`, and a retry test shows it is
   not applied twice.
-- A new migration follows `docs/migrations.md` and passes squawk and up → down → up.
+- A new migration follows `docs/migrations.md` and passes squawk and up → down → up; it adds no `CHECK`, `EXCLUDE`,
+  trigger, stored function or procedure, or domain with constraints (FIN-194; indexes, expression ones included, and
+  generated columns are allowed), and the invariant it would have expressed is checked in code with a test.
 - A new metric has bounded labels and is listed in `docs/server.md`; a new setting is declared in `Vars` and the
   tables of `docs/config.md` are regenerated, not edited by hand.
 - Unit, integration and API each cover at least 80% of all production statements; combined does not replace a suite.

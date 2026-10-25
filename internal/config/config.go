@@ -61,7 +61,7 @@ type LogConfig struct {
 // GRPCConfig configures the gRPC server.
 type GRPCConfig struct {
 	Addr           string
-	MaxRecvMsgSize int // bytes; SearchOperations needs 16 MiB (grpc-api.md, 9)
+	MaxRecvMsgSize int // bytes; UpsertUserMetrics calls are at most 4 MiB (grpc-api.md, 7.3)
 	Reflection     bool
 }
 

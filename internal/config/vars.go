@@ -37,7 +37,7 @@ var Vars = []Var{
 	{Name: "GRPC_ADDR", Command: "serve", Default: ":9090",
 		Doc: "gRPC"},
 	{Name: "GRPC_MAX_RECV_MSG_SIZE", Command: "serve", Default: "4194304",
-		Doc: "байт; 16 МиБ там, где обслуживается `SearchOperations` (grpc-api.md 9)"},
+		Doc: "байт, предел входящего сообщения. Самый большой вход analytics — `UpsertUserMetrics`, его вызовы не больше 4 МиБ (grpc-api.md 7.3); поднимать без изменения контракта не нужно"},
 	{Name: "HTTP_ADDR", Command: "serve", Default: ":9091",
 		Doc: "`/metrics`, `/healthz`, `/readyz`"},
 	{Name: "PEER_<NAME>_ADDR", Command: "serve",
