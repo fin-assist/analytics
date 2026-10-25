@@ -62,7 +62,7 @@ func TestUnitAssemblyRefusesIdentityBeforeOpeningDatabase(t *testing.T) {
 }
 
 func TestUnitAssemblyPropagatesPoolFailureAndRefusesDuplicateMetrics(t *testing.T) {
-	cfg := config.Config{Service: "template", Auth: config.AuthConfig{Mode: config.AuthInsecureDev}}
+	cfg := config.Config{Service: "template", Env: config.EnvDev, Auth: config.AuthConfig{Mode: config.AuthInsecureDev}}
 	log := slog.New(slog.DiscardHandler)
 	boom := errors.New("pool failed")
 	a, err := assemble(t.Context(), cfg, log, prometheus.NewRegistry(), func(context.Context, postgres.Options) (*postgres.DB, error) {
