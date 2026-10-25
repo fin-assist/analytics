@@ -3,8 +3,10 @@ package migrations_test
 import (
 	"testing"
 
-	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate"
-	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate/migratetest"
+	"github.com/fin-assist/go-migrate"
+	"github.com/fin-assist/go-migrate/migratetest"
+
+	"github.com/fin-assist/analytics/internal/testdb"
 	"github.com/fin-assist/analytics/migrations"
 )
 
@@ -17,7 +19,7 @@ func TestIntegrationUpDownUp(t *testing.T) {
 	if !hasMigrations(t) {
 		t.Skip("the service has no migrations yet")
 	}
-	migratetest.CheckUpDownUp(t, src)
+	migratetest.CheckUpDownUp(t, testdb.DSN(t), src)
 }
 
 func hasMigrations(t *testing.T) bool {

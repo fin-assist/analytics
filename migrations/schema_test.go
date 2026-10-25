@@ -31,8 +31,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate"
-	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate/migratetest"
+	"github.com/fin-assist/go-migrate"
+
+	"github.com/fin-assist/analytics/internal/testdb"
 	"github.com/fin-assist/analytics/migrations"
 )
 
@@ -75,7 +76,7 @@ var msk = time.FixedZone("MSK", 3*3600)
 func openDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
-	dsn := migratetest.DSN(t)
+	dsn := testdb.DSN(t)
 	cfg := migrate.DefaultConfig(dsn)
 	cfg.Logger = slog.New(slog.DiscardHandler)
 	src := migrate.Source{Name: "service", Table: "schema_migrations", FS: migrations.FS}

@@ -19,7 +19,7 @@
 ## Что ещё не подключено
 
 - Обработчики `AnalyticsService`, `MetricsIngestService`, `UserDeletionService` и их строки в `AccessPolicy()` — отдельными задачами (FIN-5 и следующие).
-- Tombstone — `NoTombstones` до выпуска `go-tombstone` ([FIN-110](https://finassist.youtrack.cloud/issue/FIN-110)); его миграции встают в `MigrationSources()` перед источником сервиса.
+- Tombstone — `NoTombstones` до отдельного подключения `go-tombstone` ([FIN-110](https://finassist.youtrack.cloud/issue/FIN-110)); его миграции встают в `MigrationSources()` перед источником сервиса.
 - Секрет `CLAUDE_CODE_OAUTH_TOKEN`, Claude GitHub App и Codex на репозитории — настраивает владелец.
 
 ## Раскладка
@@ -30,14 +30,10 @@ internal/app/                      assembly: identity, pools, server, wire() (ha
 internal/app/apitest/              the whole service in-process for API tests
 internal/domain/                   entities and invariants, no infrastructure imports
 internal/<feature>/                usecases; interfaces of repositories and clients they need
-internal/adapter/grpc/server/      gRPC server, interceptors, access table types, identity interfaces
 internal/adapter/grpc/<feature>/   gRPC handlers: messages <-> usecases
 internal/adapter/postgres/         pools, go-postgres adapter, repositories on pgx
-internal/adapter/postgres/migrate/ migration runner (migratetest: PostgreSQL for tests)
-internal/adapter/client/           clients of other services, service token source
-internal/worker/                   background jobs: outbox dispatcher, scheduled jobs
+internal/testdb/                   test server selection; public go-migrate harness owns isolated databases
 internal/config/                   configuration from the environment
-internal/reqctx/                   request-scoped values: request ID, caller, user, hints
 internal/logx/                     slog with values from the context
 internal/ops/                      /metrics, /healthz, /readyz, readiness
 migrations/                        SQL migrations, embedded into the binary
@@ -61,7 +57,10 @@ make run
 
 ## Библиотеки и обновления
 
-Транзакциями управляет [`go-postgres v0.1.1`](https://github.com/fin-assist/go-postgres) ([FIN-240](https://finassist.youtrack.cloud/issue/FIN-240)); `postgres.DB` сохраняет настройку пулов и прежний выбор primary/replica. `RunMapped` принимает обработчик конкретной операции из адаптера сервиса, включая отложенные ошибки COMMIT. Прикладные RPC analytics пока не зарегистрированы: production mappings и новые контрактные ошибки не добавлены. Правила — [docs/migrations.md](docs/migrations.md), «Нарушения ограничений и транзакции».
+FIN-257 подключает выпущенные `go-grpc v0.1.0` (server/client/reqctx), `go-migrate v0.1.0` (runner и публичный migratetest), `go-worker v0.1.0` (supervision с прежним restart5s) и `go-postgres v0.2.0` (pool lifecycle). Локальные копии удалены. Сервис сохраняет CLI, listeners/shutdown, конфигурацию, access policy, migration sources и тонкий transaction/routing adapter. Реальные миграции и schema tests analytics сохранены; бизнес-RPC, jobs, identity/tombstone интеграция остаются отдельными задачами. Тесты вызывают operational API полной сборки без фиктивного бизнес-функционала.
+
+
+Транзакциями управляет [`go-postgres v0.2.0`](https://github.com/fin-assist/go-postgres) ([FIN-240](https://finassist.youtrack.cloud/issue/FIN-240)); `postgres.DB` сохраняет настройку пулов и прежний выбор primary/replica. `RunMapped` принимает обработчик конкретной операции из адаптера сервиса, включая отложенные ошибки COMMIT. Прикладные RPC analytics пока не зарегистрированы: production mappings и новые контрактные ошибки не добавлены. Правила — [docs/migrations.md](docs/migrations.md), «Нарушения ограничений и транзакции».
 
 Общий код сервисов — отдельные Go-библиотеки из шаблона [`fin-assist/go-library-template`](https://github.com/fin-assist/go-library-template) ([FIN-118](https://finassist.youtrack.cloud/issue/FIN-118)): [`go-identity`](https://github.com/fin-assist/go-identity) (FIN-119), [`go-idempotency`](https://github.com/fin-assist/go-idempotency) (FIN-78), [`go-outbox`](https://github.com/fin-assist/go-outbox) (FIN-109), [`go-tombstone`](https://github.com/fin-assist/go-tombstone) (FIN-110).
 
@@ -103,7 +102,7 @@ make cover-combined        # informational union of the three profiles
 make cover                 # collect all three, then enforce each gate
 ```
 
-Каждый прогон использует `-race -count=1 -timeout=8m -coverpkg=./...` и выбирает функции с префиксом `TestUnit`, `TestIntegration` или `TestAPI`. Новый тест обязательно получает один из этих префиксов; `make test-names` и CI отвергают остальные имена через штатный `go test -race -list`. Все наборы инструментируют один и тот же Go-модуль целиком, включая generated production-код и Go-файлы инфраструктуры `apitest`/`migratetest`; исключений пакетов или файлов ради порога нет. `_test.go` Go в production-профиль не включает. Чистые функции и правила — unit; PostgreSQL, транспорт, клиенты и фоновые процессы — integration; полная сборка приложения с вызовом публичного API — api. Прямой вызов handler не считается API-тестом.
+Каждый прогон использует `-race -count=1 -timeout=8m -coverpkg=./...` и выбирает функции с префиксом `TestUnit`, `TestIntegration` или `TestAPI`. Новый тест обязательно получает один из этих префиксов; `make test-names` и CI отвергают остальные имена через штатный `go test -race -list`. Все наборы инструментируют один и тот же Go-модуль целиком, включая generated production-код и Go-файлы инфраструктуры `internal/app/apitest`/`internal/testdb`; исключений пакетов или файлов ради порога нет. `_test.go` Go в production-профиль не включает. Чистые функции и правила — unit; PostgreSQL, транспорт, клиенты и фоновые процессы — integration; полная сборка приложения с вызовом публичного API — api. Прямой вызов handler не считается API-тестом.
 
 `scripts/check-suite.sh` проверяет JSON-события Go: набор должен действительно выполнить хотя бы один тест и завершиться без failed/skipped тестов. Отсутствующий, пустой профиль, только заголовок и профиль без исполняемых statements отвергаются. Это проверка факта исполнения, не собственный расчёт процентов. Для всех coverage-прогонов `CI=true`: отсутствие PostgreSQL даёт ошибку, а не успешный skip. Инструмент округляет процент до одного знака перед проверкой порога; это согласованное поведение v2.20.1.
 
@@ -111,6 +110,6 @@ CI сохраняет `.out`, `.jsonl`, `*.coverage.txt` и `*.report.txt` ка�
 
 Прежний критерий «80% изменённых исполняемых строк» заменён тремя порогами statements. Исторические проценты строк не сопоставимы с новыми. Проценты не доказывают полноту бизнес-сценариев.
 
-Подробности классификации и исходные дефициты — [docs/testing.md](docs/testing.md).
+Подробности классификации, текущих проверок и исторических дефицитов — [docs/testing.md](docs/testing.md).
 
 Модули `github.com/fin-assist/*` берутся из git, минуя прокси (`GOPRIVATE`, задан в `Makefile` и CI). Для приватного — токен с чтением репозиториев fin-assist: локально `git config --global url."https://x-access-token:<token>@github.com/fin-assist/".insteadOf "https://github.com/fin-assist/"`, в CI — секрет `GO_MODULES_TOKEN`, в `docker build` — секрет `netrc`.

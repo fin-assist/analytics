@@ -1,14 +1,13 @@
-// Command service is the binary of the service: "serve" runs the gRPC server with its
+// Command analytics is the binary of the service: "serve" runs the gRPC server with its
 // background jobs (FIN-117), "migrate" applies database migrations before a rollout
 // (FIN-115). Configuration comes from the environment (docs/config.md).
-//
-// Rename the directory to the service name (cmd/user, cmd/bank-bff, ...) in a new service.
 package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -18,22 +17,27 @@ import (
 // version is set at build time (-X main.version=...).
 var version = "dev"
 
-func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+func main() { os.Exit(mainExit(os.Args[1:], os.Stderr)) }
+
+// mainExit owns process setup and the command exit status. Returning before os.Exit
+// also releases the signal subscription on unsuccessful invocations.
+func mainExit(args []string, stderr io.Writer) int {
+	logger := slog.New(slog.NewJSONHandler(stderr, nil))
 	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, os.Args[1:]); err != nil {
+	if err := run(ctx, args); err != nil {
 		var usage usageError
 		if errors.As(err, &usage) {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
+			_, _ = fmt.Fprintln(stderr, err)
+			return 2
 		}
 		logger.Error("failed", "error", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 type usageError string
@@ -41,11 +45,11 @@ type usageError string
 func (e usageError) Error() string { return string(e) }
 
 const usage = `usage:
-  service serve                            run the gRPC server, /metrics and background jobs
-  service migrate up                       apply pending migrations of all sources
-  service migrate version                  print applied versions
-  service migrate down <source> <steps>    roll back the last steps of one source
-  service migrate force <source> <version> set the version and clear the dirty flag`
+  analytics serve                            run the gRPC server, /metrics and background jobs
+  analytics migrate up                       apply pending migrations of all sources
+  analytics migrate version                  print applied versions
+  analytics migrate down <source> <steps>    roll back the last steps of one source
+  analytics migrate force <source> <version> set the version and clear the dirty flag`
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {

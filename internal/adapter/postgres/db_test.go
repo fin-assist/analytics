@@ -9,14 +9,15 @@ import (
 
 	pgstore "github.com/fin-assist/go-postgres"
 
+	"github.com/fin-assist/go-grpc/reqctx"
+
 	"github.com/fin-assist/analytics/internal/adapter/postgres"
-	"github.com/fin-assist/analytics/internal/adapter/postgres/migrate/migratetest"
-	"github.com/fin-assist/analytics/internal/reqctx"
+	"github.com/fin-assist/analytics/internal/testdb"
 )
 
 func open(t *testing.T) *postgres.DB {
 	t.Helper()
-	dsn := migratetest.DSN(t)
+	dsn := testdb.DSN(t)
 	db, err := postgres.Open(context.Background(), postgres.Options{PrimaryDSN: dsn, AppName: "test"})
 	if err != nil {
 		t.Fatal(err)

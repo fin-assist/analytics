@@ -23,7 +23,8 @@ updates them in the same PR. A service made from the template rewrites the first
   never defines its own `.proto`, error codes or REST fields: a change goes to `contracts` first (its own FIN issue
   and PR), then the service bumps the module.
 - Shared code: Go libraries made from `fin-assist/go-library-template` (FIN-118) — `go-identity`, `go-idempotency`,
-  `go-outbox`, `go-tombstone`, `go-postgres` (FIN-240, v0.1.1). The service imports them at tagged versions and wires
+  `go-outbox`, `go-tombstone`; infrastructure uses `go-grpc`, `go-migrate`, `go-worker` v0.1.0 and
+  `go-postgres` v0.2.0 (FIN-257). The service imports needed libraries at tagged versions and wires
   them in `internal/app` by the «Внедрение» section of their README; versions and compatibility — `docs/releasing.md`
   of the library template.
   Code that more than one service needs goes into a library (its own FIN issue), not into a copy here.
@@ -45,16 +46,16 @@ updates them in the same PR. A service made from the template rewrites the first
 | The whole service in-process for API tests | `internal/app/apitest/` |
 | Entities and invariants (no pgx, gRPC or generated code) | `internal/domain/` |
 | Usecases and the interfaces of repositories and clients they need | `internal/<feature>/` |
-| gRPC server, interceptors, access table types, identity and tombstone interfaces | `internal/adapter/grpc/server/`; rules — `docs/server.md` |
+| gRPC server, interceptors, access table types, identity and tombstone interfaces | `github.com/fin-assist/go-grpc/server`; rules — `docs/server.md` |
 | gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/` |
 | Pools, transaction manager, repositories | `internal/adapter/postgres/`; rules — `docs/migrations.md`, «Запросы на pgx» |
-| Migration runner and the PostgreSQL for tests | `internal/adapter/postgres/migrate/`, `migratetest/` |
+| Migration runner and the PostgreSQL for tests | `github.com/fin-assist/go-migrate`, its public `migratetest`, `internal/testdb/` |
 | SQL migrations (embedded) | `migrations/`; rules — `docs/migrations.md` |
 | Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the proposed SQL and the `PeriodSnapshot` ↔ rows mapping — `migrations/snapshot_rows_test.go`; tests on PostgreSQL — `migrations/schema_test.go`, unit tests of the mapping — `migrations/snapshot_rows_unit_test.go` |
-| Clients of other services, service token source | `internal/adapter/client/` |
-| Background jobs | `internal/worker/` |
+| Clients of other services, service token source | `github.com/fin-assist/go-grpc/client`; future peer-specific adapters in `internal/adapter/client/` |
+| Background jobs | `github.com/fin-assist/go-worker`; future jobs in `internal/worker/` |
 | Configuration: every variable with its default and description | `internal/config/vars.go` (`Vars`); generated tables — `docs/config.md` |
-| Request-scoped values (request ID, caller, user, bank-bff hints) | `internal/reqctx/` |
+| Request-scoped values (request ID, caller, user, bank-bff hints) | `github.com/fin-assist/go-grpc/reqctx` |
 | Logger, metrics endpoint, readiness | `internal/logx/`, `internal/ops/` |
 | Image, local run, stand | `Dockerfile`, `compose.yaml`, `Makefile`, `deploy/systemd/` |
 | CI, lint | `.github/workflows/ci.yml`, `.golangci.yml`, `.squawk.toml` |
@@ -65,7 +66,7 @@ updates them in the same PR. A service made from the template rewrites the first
 ### Stack
 
 Versions are in `go.mod` (Go toolchain included), `.github/workflows/ci.yml` and `Makefile` (golangci-lint), `compose.yaml`
-and `migratetest.DefaultImage` (PostgreSQL). Main pieces: grpc-go, protobuf, protovalidate, pgx v5, golang-migrate,
+and `testdb.DefaultImage` (PostgreSQL). Main pieces: grpc-go, protobuf, protovalidate, pgx v5, golang-migrate,
 prometheus client_golang, testcontainers-go, squawk; the fin-assist libraries above. A new dependency is named in
 the PR with why it is needed.
 
@@ -182,7 +183,7 @@ Every change comes with its automated tests in the same PR — not in a follow-u
   mappers, validation, config, helpers, interceptors) has unit tests in its package: no database, no network, fakes
   of the interfaces the code declares; the main path and every branch and error the code handles.
 - **Integration tests — all new functionality.** Every new or changed behaviour is tested against its real
-  dependencies: repositories, migrations, transactions and locks against PostgreSQL (`migratetest.DSN`), not mocks of
+  dependencies: repositories, migrations, transactions and locks against PostgreSQL (`testdb.DSN`), not mocks of
   pgx — the SQL itself is what is tested; clients of other services against a fake gRPC server on bufconn
   (retries, deadlines, metadata); jobs and the outbox through a real run. Every migration passes up → down → up
   (`migrations/migrations_test.go`).
@@ -229,7 +230,7 @@ image publication and deployment remain separate. Existing releases are preserve
 
 Use native Go profiles and pinned go-test-coverage v2.20.1. All three suites use `-race -count=1 -timeout=8m`
 and `-coverpkg=./...` with the same whole-module denominator and no production-file exclusions. Generated code and
-non-test `apitest`/`migratetest` helpers remain included. Each suite must execute tests with no failures/skipped tests;
+non-test `internal/app/apitest`/`internal/testdb` helpers remain included. Each suite must execute tests with no failures/skipped tests;
 missing, empty, header-only and zero-statement profiles fail before the percentage tool runs. PostgreSQL is mandatory
 (`CI=true`). The tool merges profiles for the supplemental combined result and rounds to one decimal before gating.
 No custom percentage parser or changed-line calculation. CI reports unit/integration/api/combined and uploads the
@@ -378,3 +379,7 @@ security-relevant behaviour has negative tests.
 ## Renovate automation
 
 FIN-211: dependency-only Renovate PRs may be merged/closed by the reviewed `renovate-policy.yml` controller, after exact-head required CI and bot-only commit checks. Ordinary PRs and release-to-main PRs still require the owner. Do not enable native automerge or bypass protections. Preserve base policy in `renovate-base.json` (schedules, groups, allowed versions and manual Go upgrades); generated target/version approvals live on the separate `renovate-policy` branch. Failed exact values are isolated for explicit Dashboard approval; new values keep their original groups. AndroidX/Compose and mixed groups never auto-merge. See `docs/renovate-policy.md` for credentials, safeguards, bootstrap and verification.
+
+## Shared infrastructure (FIN-257)
+
+The service keeps CLI/listener ownership, configuration, access policy, migration sources, PostgreSQL routing and error mapping. Shared interceptors/client/reqctx, migration runner/test harness, pool lifecycle and worker supervision are imported from released libraries; no local transport/runner copies remain. `AUTH_MODE=verify` and NoTombstones remain the existing scaffold state; this task does not activate production identity or business RPCs. Integration/API tests retain the real analytics migration and schema; operational API tests never register fake business RPCs or SQL. Unit assembly/lifecycle ports do not open a database or network.
