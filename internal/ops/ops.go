@@ -8,7 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,19 +25,33 @@ func NewRegistry() *prometheus.Registry {
 
 // Readiness keeps the last result of the readiness check. Once Drain is called the
 // process is shutting down and stays not ready for good, whatever the check says.
-type Readiness struct{ ready, draining atomic.Bool }
+// One mutex orders Drain against Watch's update and its onChange call, so no
+// onChange(true) is in flight or starts after Drain returns.
+type Readiness struct {
+	mu       sync.Mutex
+	ready    bool
+	draining bool
+}
 
 // Ready reports the last result; false after Drain.
-func (r *Readiness) Ready() bool { return r.ready.Load() && !r.draining.Load() }
+func (r *Readiness) Ready() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.ready && !r.draining
+}
 
 // Drain marks the process as shutting down: /readyz answers 503 from now on, so
-// balancers stop sending new requests during SHUTDOWN_DELAY. It is irreversible.
+// balancers stop sending new requests during SHUTDOWN_DELAY. It is irreversible and
+// waits for an onChange that Watch has already started.
 func (r *Readiness) Drain() {
-	r.draining.Store(true)
-	r.ready.Store(false)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.draining = true
+	r.ready = false
 }
 
 // Watch runs check every interval until ctx ends and calls onChange when the result flips.
+// The check itself runs without the lock; the update and onChange run under it.
 func (r *Readiness) Watch(ctx context.Context, interval time.Duration, log *slog.Logger, check func(context.Context) error, onChange func(bool)) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -48,21 +62,32 @@ func (r *Readiness) Watch(ctx context.Context, interval time.Duration, log *slog
 		if ctx.Err() != nil {
 			return
 		}
-		ok := err == nil && !r.draining.Load()
-		if r.ready.Swap(ok) != ok || first {
-			if !ok {
-				log.WarnContext(ctx, "not ready", "error", err)
-			} else {
-				log.InfoContext(ctx, "ready")
-			}
-			onChange(ok)
-		}
+		r.update(ctx, log, err, first, onChange)
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
 		}
 	}
+}
+
+func (r *Readiness) update(ctx context.Context, log *slog.Logger, err error, first bool, onChange func(bool)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.draining {
+		return // readiness is down for good; gRPC health is left to Shutdown
+	}
+	ok := err == nil
+	if r.ready == ok && !first {
+		return
+	}
+	r.ready = ok
+	if !ok {
+		log.WarnContext(ctx, "not ready", "error", err)
+	} else {
+		log.InfoContext(ctx, "ready")
+	}
+	onChange(ok)
 }
 
 // Handler serves /metrics, /healthz and /readyz.
