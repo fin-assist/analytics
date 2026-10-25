@@ -7,7 +7,7 @@ require (
 	github.com/fin-assist/go-grpc v0.2.0
 	github.com/fin-assist/go-identity v0.2.0
 	github.com/fin-assist/go-migrate v0.1.1
-	github.com/fin-assist/go-postgres v0.2.0
+	github.com/fin-assist/go-postgres v0.3.0
 	github.com/fin-assist/go-tombstone v0.1.0
 	github.com/fin-assist/go-worker v0.1.0
 	github.com/google/uuid v1.6.0
