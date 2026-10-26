@@ -9,7 +9,7 @@
 
 ### Исправлено
 
-- Пример unit-файла стенда `deploy/systemd/analytics.service` запускается при `ENV=stage`: ключ подписи стенда передаётся через `LoadCredential=stage-signing`, `AUTH_STAGE_SIGNING_KEY_FILE` и `AUTH_STAGE_PUBLIC_KEYS_FILE` заданы активными `Environment=`; в env-файле остаются `AUTH_STAGE_ISSUER`, `AUTH_USER_ISSUER`, `AUTH_USER_AUDIENCE`, `PEER_USER_ADDR`. Устаревший комментарий про `SERVICE_TOKEN_FILE` удалён; unit-тест загружает конфигурацию из unit-файла. Версии библиотек в `AGENTS.md`, README и `docs/` приведены к `go.mod` (go-postgres v0.3.0, go-migrate v0.1.1, go-grpc v0.2.0) (FIN-347).
+- Пример unit-файла стенда `deploy/systemd/analytics.service` запускается при `ENV=stage`: ключ подписи стенда передаётся через `LoadCredential=stage-signing`, `AUTH_STAGE_SIGNING_KEY_FILE` и `AUTH_STAGE_PUBLIC_KEYS_FILE` заданы активными `Environment=`, `SERVICE_NAME=analytics` (kid/sub ключа подписи) задаёт сам unit, шапка называет режимы файлов ключей (ключ 0600 root, общий JWKS 0644); в env-файле остаются `AUTH_STAGE_ISSUER`, `AUTH_USER_ISSUER`, `AUTH_USER_AUDIENCE`, `PEER_USER_ADDR`. Устаревший комментарий про `SERVICE_TOKEN_FILE` удалён; unit-тест загружает конфигурацию из unit-файла. Версии библиотек в `AGENTS.md`, README и `docs/` приведены к `go.mod` (go-postgres v0.3.0, go-migrate v0.1.1, go-grpc v0.2.0) (FIN-347).
 
 ### Изменено
 

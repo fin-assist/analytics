@@ -55,6 +55,10 @@ func TestUnitStandUnitSatisfiesStageIdentity(t *testing.T) {
 	if unit.env["ENV"] != "stage" {
 		t.Fatalf("unit ENV=%q, want stage", unit.env["ENV"])
 	}
+	// SERVICE_NAME is the kid/sub of the stand signing key, fixed by the unit itself.
+	if unit.env["SERVICE_NAME"] != "analytics" {
+		t.Fatalf("unit SERVICE_NAME=%q, want analytics", unit.env["SERVICE_NAME"])
+	}
 	for _, name := range []string{"AUTH_STAGE_SIGNING_KEY_FILE", "AUTH_STAGE_PUBLIC_KEYS_FILE", "DB_PRIMARY_DSN_FILE"} {
 		if unit.env[name] == "" {
 			t.Fatalf("unit does not set %s", name)
@@ -67,8 +71,7 @@ func TestUnitStandUnitSatisfiesStageIdentity(t *testing.T) {
 	}
 	vars := map[string]string{
 		// The env file of the stand: only non-secret settings named in the unit comment.
-		"SERVICE_NAME": "analytics", "AUTH_STAGE_ISSUER": "stage-services",
-		"AUTH_USER_ISSUER": "https://user.example", "AUTH_USER_AUDIENCE": "finassist", "PEER_USER_ADDR": "dns:///user:9090",
+		"AUTH_STAGE_ISSUER": "stage-services", "AUTH_USER_ISSUER": "https://user.example", "AUTH_USER_AUDIENCE": "finassist", "PEER_USER_ADDR": "dns:///user:9090",
 	}
 	for name, value := range unit.env {
 		vars[name] = value
