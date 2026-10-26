@@ -69,14 +69,18 @@ func TestUnitStandUnitSatisfiesStageIdentity(t *testing.T) {
 			t.Fatalf("%s names credential %q that the unit does not load", name, credential)
 		}
 	}
-	vars := map[string]string{
-		// The env file of the stand: only non-secret settings named in the unit comment.
+	// The env file of the stand: only non-secret settings named in the unit comment.
+	envFile := map[string]string{
 		"AUTH_STAGE_ISSUER": "stage-services", "AUTH_USER_ISSUER": "https://user.example", "AUTH_USER_AUDIENCE": "finassist", "PEER_USER_ADDR": "dns:///user:9090",
 	}
-	// systemd applies EnvironmentFile= over Environment=: an env file that repeated a
-	// unit setting would silently replace it.
+	// Merge in systemd order: Environment= of the unit first, EnvironmentFile= over it.
+	// An env file that repeated a unit setting would silently replace it, so refuse that.
+	vars := map[string]string{}
 	for name, value := range unit.env {
-		if _, ok := vars[name]; ok {
+		vars[name] = value
+	}
+	for name, value := range envFile {
+		if _, ok := unit.env[name]; ok {
 			t.Fatalf("the env file would override the unit setting %s", name)
 		}
 		vars[name] = value
