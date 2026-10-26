@@ -4,7 +4,8 @@
 #
 # Secrets are systemd credentials, not environment variables: they do not show up in
 # "systemctl show" or /proc/<pid>/environ.
-#   /etc/finassist/<service>/env            non-secret settings (see docs/config.md)
+#   /etc/finassist/<service>/env            non-secret settings (see docs/config.md); EnvironmentFile=
+#                                           overrides Environment=, so it must not set what this unit sets
 #   /etc/finassist/<service>/db-primary-dsn DSN, mode 0600, owner root
 #   /etc/finassist/<service>/stage-signing.pem  stand signing key, mode 0600, owner root (LoadCredential)
 #   /etc/finassist/stage-public.jwks            stand public JWKS shared by all services, mode 0644
