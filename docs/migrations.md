@@ -2,7 +2,7 @@
 
 Решение — [FIN-115](https://finassist.youtrack.cloud/issue/FIN-115), Confluence «Архитектура» → «Миграции и доступ к БД».
 
-- Runner — [`go-migrate v0.1.0`](https://github.com/fin-assist/go-migrate/tree/v0.1.0), использующий golang-migrate и pgx/v5. Публичные операции, queue/cancellation/cleanup и typed errors — в README библиотеки; сервис задаёт источники и CLI.
+- Runner — [`go-migrate v0.1.1`](https://github.com/fin-assist/go-migrate/tree/v0.1.1), использующий golang-migrate и pgx/v5. Публичные операции, queue/cancellation/cleanup и typed errors — в README библиотеки; сервис задаёт источники и CLI.
 - Запросы — ручной SQL на `pgx/v5`, без ORM и генерации кода.
 - Линтер миграций — [squawk](https://squawkhq.com) в CI.
 
@@ -113,7 +113,7 @@ analytics migrate force <source> <version>  # выставить версию и
 
 ### Нарушения ограничений и транзакции (FIN-195)
 
-Общий механизм находится в `github.com/fin-assist/go-postgres` v0.2.0; `OpenPools` открывает пулы по переданным сервисом настройкам, `postgres.DB` остаётся тонким адаптером менеджера транзакций с выбором primary/replica. Usecase задаёт границы операции через собственный `Run`-интерфейс. Для операции с ожидаемыми нарушениями адаптер реализует этот интерфейс через `db.RunMapped(ctx, opts, mapper, fn)`.
+Общий механизм находится в `github.com/fin-assist/go-postgres` v0.3.0; `OpenPools` открывает пулы по переданным сервисом настройкам, `postgres.DB` остаётся тонким адаптером менеджера транзакций с выбором primary/replica. Usecase задаёт границы операции через собственный `Run`-интерфейс. Для операции с ожидаемыми нарушениями адаптер реализует этот интерфейс через `db.RunMapped(ctx, opts, mapper, fn)`.
 
 Обработчик определён в адаптере **конкретной операции** и использует `pgstore.IsViolation(err, SQLSTATE, constraint)` из `go-postgres` (alias `pgstore`): проверяются и код, и имя ограничения. Он возвращает доменную ошибку без исходного `PgError` и его `Detail` либо `nil` для неизвестного случая (сохраняется исходная ошибка). Usecase переводит доменную ошибку в `finerr` по контракту: отсутствующий/чужой объект — `NOT_FOUND` или специальный код метода; `VALIDATION_ERROR` — только неверный формат. Для удаления родителя с зависимостями нужен код контракта; при отсутствии сначала изменить `contracts`. Неожиданное нарушение, например ключ, сформированный сервисом, остаётся внутренней ошибкой.
 

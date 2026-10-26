@@ -6,6 +6,9 @@
 # "systemctl show" or /proc/<pid>/environ.
 #   /etc/finassist/<service>/env            non-secret settings (see docs/config.md)
 #   /etc/finassist/<service>/db-primary-dsn DSN, mode 0600, owner root
+#   /etc/finassist/<service>/stage-signing.pem  stand signing key, mode 0600, owner root (LoadCredential)
+#   /etc/finassist/stage-public.jwks            stand public JWKS shared by all services, mode 0644
+#                                               (/etc/finassist 0755): DynamicUser reads it directly
 [Unit]
 Description=fin-assist analytics
 After=network-online.target postgresql.service
@@ -16,11 +19,17 @@ Type=exec
 ExecStart=/opt/finassist/analytics/analytics serve
 EnvironmentFile=/etc/finassist/analytics/env
 Environment=ENV=stage
+# SERVICE_NAME is the kid/sub of the stand signing key and must match its kid in the shared JWKS.
+Environment=SERVICE_NAME=analytics
 LoadCredential=db-primary-dsn:/etc/finassist/analytics/db-primary-dsn
 Environment=DB_PRIMARY_DSN_FILE=%d/db-primary-dsn
-# The service token file of FIN-119 goes the same way:
-#LoadCredential=service-token:/etc/finassist/analytics/service-token
-#Environment=SERVICE_TOKEN_FILE=%d/service-token
+# With ENV=stage and AUTH_MODE=verify (the default) service identity uses the stand key files
+# (FIN-347, docs/config.md): env must set AUTH_STAGE_ISSUER, as well as AUTH_USER_ISSUER,
+# AUTH_USER_AUDIENCE and PEER_USER_ADDR. Without these files and settings the unit does not start.
+LoadCredential=stage-signing:/etc/finassist/analytics/stage-signing.pem
+Environment=AUTH_STAGE_SIGNING_KEY_FILE=%d/stage-signing
+Environment=AUTH_STAGE_PUBLIC_KEYS_FILE=/etc/finassist/stage-public.jwks
+# ENV=prod (Kubernetes, AUTH_KUBERNETES_* and SERVICE_TOKEN_FILE) is not deployed by this unit.
 
 DynamicUser=yes
 Restart=on-failure
