@@ -23,8 +23,8 @@ updates them in the same PR. A service made from the template rewrites the first
   never defines its own `.proto`, error codes or REST fields: a change goes to `contracts` first (its own FIN issue
   and PR), then the service bumps the module.
 - Shared code: Go libraries made from `fin-assist/go-library-template` (FIN-118) — `go-identity`, `go-idempotency`,
-  `go-outbox`, `go-tombstone`; infrastructure uses `go-grpc`, `go-migrate`, `go-worker` v0.1.0 and
-  `go-postgres` v0.2.0 (FIN-257). The service imports needed libraries at tagged versions and wires
+  `go-outbox`, `go-tombstone`; infrastructure uses `go-grpc` v0.2.0, `go-migrate` v0.1.1, `go-worker` v0.1.0 and
+  `go-postgres` v0.3.0 (FIN-257). The service imports needed libraries at tagged versions and wires
   them in `internal/app` by the «Внедрение» section of their README; versions and compatibility — `docs/releasing.md`
   of the library template.
   Code that more than one service needs goes into a library (its own FIN issue), not into a copy here.

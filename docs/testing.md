@@ -1,6 +1,6 @@
 # Проверки и покрытие (FIN-238 / FIN-257 / FIN-330)
 
-analytics использует выпущенные `go-grpc v0.2.0`, `go-migrate v0.1.1`, `go-worker v0.1.0`, `go-postgres v0.2.0`, `go-identity v0.2.0` и `go-tombstone v0.1.0`. FIN-330 реализует `UpsertUserMetrics`, `ListPeriods`, `PurgeUserData`, production identity и tombstones; `GetAnalytics` — FIN-5.
+analytics использует выпущенные `go-grpc v0.2.0`, `go-migrate v0.1.1`, `go-worker v0.1.0`, `go-postgres v0.3.0`, `go-identity v0.2.0` и `go-tombstone v0.1.0`. FIN-330 реализует `UpsertUserMetrics`, `ListPeriods`, `PurgeUserData`, production identity и tombstones; `GetAnalytics` — FIN-5.
 
 | Набор | Выбор Go | Что проверяется |
 |---|---|---|

@@ -30,7 +30,7 @@
 
 ## PostgreSQL и lifecycle
 
-Сервис передаёт pool options в `go-postgres.OpenPools` v0.2.0. Локальный `postgres.DB` остаётся тонким адаптером менеджера транзакций и маршрутизации: `Writer` выбирает транзакцию/primary, `Reader` — транзакцию, primary для `x-read-primary` от `bank-bff` или реплику. Репозитории и domain mapping принадлежат сервису; подробнее — [migrations.md](migrations.md).
+Сервис передаёт pool options в `go-postgres.OpenPools` v0.3.0. Локальный `postgres.DB` остаётся тонким адаптером менеджера транзакций и маршрутизации: `Writer` выбирает транзакцию/primary, `Reader` — транзакцию, primary для `x-read-primary` от `bank-bff` или реплику. Репозитории и domain mapping принадлежат сервису; подробнее — [migrations.md](migrations.md).
 
 `cmd/analytics` владеет listeners и порядком shutdown: readiness/health перестают сообщать готовность (`ops.Readiness.Drain` — необратимо, HTTP `/readyz` отвечает 503 вместе с gRPC health `NOT_SERVING`, FIN-275), выдерживается `SHUTDOWN_DELAY`, gRPC graceful stop ограничен `SHUTDOWN_TIMEOUT`, затем останавливаются jobs и закрываются пулы. Вынос библиотек не меняет этот порядок или конфигурационные defaults.
 
