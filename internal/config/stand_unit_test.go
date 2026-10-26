@@ -73,7 +73,12 @@ func TestUnitStandUnitSatisfiesStageIdentity(t *testing.T) {
 		// The env file of the stand: only non-secret settings named in the unit comment.
 		"AUTH_STAGE_ISSUER": "stage-services", "AUTH_USER_ISSUER": "https://user.example", "AUTH_USER_AUDIENCE": "finassist", "PEER_USER_ADDR": "dns:///user:9090",
 	}
+	// systemd applies EnvironmentFile= over Environment=: an env file that repeated a
+	// unit setting would silently replace it.
 	for name, value := range unit.env {
+		if _, ok := vars[name]; ok {
+			t.Fatalf("the env file would override the unit setting %s", name)
+		}
 		vars[name] = value
 	}
 	dsnFile := unit.env["DB_PRIMARY_DSN_FILE"]
