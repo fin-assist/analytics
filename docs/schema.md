@@ -247,8 +247,9 @@ metadata; при возврате к новому consumer старые сним
 не вводит отдельный hash или новую проверку совпадения payload при равной версии.
 
 `GetAnalytics` читает всё одним statement snapshot. При наличии выбранного снимка возвращает
-его metadata, даже когда состояние пользователя новее и имеет `recalculating=true`. Подстановка
-более свежего состояния в старый снимок запрещена. Нет выбранного снимка либо `has_data=false`
+пересечение известных одинаковых ревизий его metadata и использованного состояния экрана,
+включая `recalculating=true`: состояние влияет на пояс, покрытие, полные месяцы и stale.
+Расходящийся/неизвестный код опускается; более свежее состояние не сертифицирует старый снимок. Нет выбранного снимка либо `has_data=false`
 — используется metadata состояния. У ответа `has_data=false` допустима только новая внутренняя
 provenance, прежние финансовые поля остаются отсутствующими.
 
@@ -256,7 +257,7 @@ provenance, прежние финансовые поля остаются отс
 заголовок наибольшего transfer_mode. Producer обязан присылать оба режима атомарно с одинаковыми
 ревизиями. Если частичная доставка оставила выбранный режим старым, берётся именно его provenance.
 Для непустого списка код известен только при одинаковом известном значении у всех выбранных
-заголовков; отсутствующий/расходящийся код не заменяется metadata состояния. При пустом списке
+заголовков и использованного состояния пользователя (включая пояс); отсутствующий/расходящийся код не заменяется более свежей metadata. При пустом списке
 используется metadata состояния. Таким образом частичная/legacy история явно оставляет часть
 ревизий неизвестными; assistant FIN-368 возвращает `unverified`, а не подтверждение актуальности.
 
@@ -264,10 +265,14 @@ provenance, прежние финансовые поля остаются отс
 | --- | --- |
 | Не более32 записей, уникальный code, ASCII `[a-z][a-z0-9_]{0,63}`, значение ≥0; unknown valid code сохраняется. Неверная metadata любого state/period отклоняет весь ingest bare INVALID_ARGUMENT до эффектов | `TestUnitRevisionMetadataIsOpenBoundedAndExact`, `TestUnitRevisionConversionPreservesOpenCodesWithoutLoss`, `TestAPISourceRevisionsRejectInvalidWholeBatch` и integration-эквивалент |
 | Метаданные принадлежат конкретному выбранному снимку/состоянию; lower-version/retry не искажают provenance; last delete/purge/late write не воскрешают данные | `TestAPISourceProvenanceBelongsToSelectedSnapshot` и integration-эквивалент |
-| Пустая/частичная/legacy metadata не получает ложную baseline; ListPeriods возвращает per-code intersection | те же реальные PG/gRPC сценарии + `TestIntegrationProvenanceUpgradeDoesNotInventLegacyBaselines` |
-| Хранимые invalid JSON/negative/overflowed revisions дают внутреннюю ошибку чтения, не пользовательскую validation и не тихое подтверждение свежести | `TestUnitRevisionJSONPreservesInt64AndRejectsCorruptStorage`, `TestUnitAnalyticsReadRejectsCorruptStoredProvenance` |
+| Пустая/частичная/legacy metadata не получает ложную baseline; составные ответы возвращают per-code intersection с использованным состоянием | `TestUnitResponseProvenanceIntersectsEveryUsedSource`, `TestUnitPeriodProvenanceIncludesUsedScreenState`, `TestAPIResponseProvenanceIncludesStateAndSnapshot` и integration-эквивалент, `TestIntegrationProvenanceUpgradeDoesNotInventLegacyBaselines` |
+| Хранимые invalid JSON/negative/overflowed revisions дают внутреннюю ошибку чтения, не пользовательскую validation и не тихое подтверждение свежести | `TestUnitRevisionJSONPreservesInt64AndRejectsCorruptStorage`, `TestUnitAnalyticsReadRejectsCorruptStoredProvenance`, `TestAPIStoredRevisionNullIsNotKnownZero` и integration-эквивалент |
 
 Порядок внедрения: опубликованный контрактный тег → этот analytics consumer и BFF с текстом
 новых changed_since → revision-aware producer → assistant с сохранённой baseline. Временный
 локальный Go replace не является выпуском/основанием сервисного PR; production зависимости
 закрепляются опубликованным тегом до PR. Фактическая выкладка и публикация тега — отдельно.
+
+Сохранённая metadata декодируется только из JSON object с целыми int64-значениями; null внутри
+object, дроби, bool и неверная форма приводят к INTERNAL на чтении, без ложного known-zero.
+SQL NULL/JSON null целиком и пустой object остаются неизвестной legacy provenance.

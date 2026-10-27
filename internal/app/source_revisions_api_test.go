@@ -89,7 +89,7 @@ func provenanceScenario(t *testing.T) {
 	if !selected.State.Recalculating {
 		t.Fatal("fixture did not retain old snapshot")
 	}
-	revisionsWant(t, selected.DataRevisions, old)
+	revisionsWant(t, selected.DataRevisions, map[string]int64{"uploads": 2, "future_source": math.MaxInt64})
 	revisionsWant(t, get("2026-08").DataRevisions, current)
 	if _, err := c.ingest.UpsertUserMetrics(producer(ctx), versionedRequest(alice, 3, "2026-08", current, current)); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func provenanceScenario(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	revisionsWant(t, restored.DataRevisions, old)
+	revisionsWant(t, restored.DataRevisions, map[string]int64{"uploads": 2, "future_source": math.MaxInt64})
 	newest := map[string]int64{"categories": 8, "uploads": 4, "time_zone": 2, "future_source": math.MaxInt64}
 	if _, err = c.ingest.UpsertUserMetrics(producer(ctx), versionedRequest(alice, 8, "2026-09", newest, newest)); err != nil {
 		t.Fatal(err)
@@ -208,5 +208,99 @@ func invalidProvenanceScenario(t *testing.T) {
 	}
 	if rowCount(t, env, bob) != 0 {
 		t.Fatal("foreign tenant changed")
+	}
+}
+
+func TestAPIResponseProvenanceIncludesStateAndSnapshot(t *testing.T) { responseProvenanceScenario(t) }
+func TestIntegrationResponseProvenanceIncludesStateAndSnapshot(t *testing.T) {
+	responseProvenanceScenario(t)
+}
+func responseProvenanceScenario(t *testing.T) {
+	for _, order := range []string{"period-then-state", "state-then-period", "legacy-state"} {
+		t.Run(order, func(t *testing.T) {
+			_, c := startAPI(t)
+			state := map[string]int64{"categories": 1, "uploads": 4, "time_zone": 1, "future_source": math.MaxInt64}
+			period := map[string]int64{"categories": 1, "uploads": 5, "time_zone": 2, "future_source": math.MaxInt64}
+			initial := versionedRequest(alice, 1, "2026-09", period, period)
+			if order != "period-then-state" {
+				initial.State.DataRevisions = revisionList(state)
+			}
+			if order == "legacy-state" {
+				initial.State.DataRevisions = nil
+			}
+			if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), initial); err != nil {
+				t.Fatal(err)
+			}
+			if order == "period-then-state" {
+				update := versionedRequest(alice, 2, "", state, nil)
+				update.State.Recalculating = true
+				if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), update); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				update := versionedRequest(alice, 2, "2026-09", nil, period)
+				update.State = nil // A period-only update cannot replace the stored screen state.
+				if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), update); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want := map[string]int64{"categories": 1, "future_source": math.MaxInt64}
+			if order == "legacy-state" {
+				want = map[string]int64{}
+			}
+			response, err := c.analytics.GetAnalytics(apitest.Caller(t.Context(), "assistant"), &pb.GetAnalyticsRequest{UserId: proto.String(alice), PeriodKey: proto.String("2026-09")})
+			if err != nil || !response.HasData || response.State == nil {
+				t.Fatal(response, err)
+			}
+			revisionsWant(t, response.DataRevisions, want)
+			list, err := c.analytics.ListPeriods(apitest.Caller(t.Context(), "assistant"), &pb.ListPeriodsRequest{UserId: proto.String(alice)})
+			if err != nil || len(list.Periods) != 1 {
+				t.Fatal(list, err)
+			}
+			revisionsWant(t, list.DataRevisions, want)
+		})
+	}
+}
+
+func TestAPIStoredRevisionNullIsNotKnownZero(t *testing.T)         { corruptRevisionScenario(t) }
+func TestIntegrationStoredRevisionNullIsNotKnownZero(t *testing.T) { corruptRevisionScenario(t) }
+func corruptRevisionScenario(t *testing.T) {
+	env, c := startAPI(t)
+	known := map[string]int64{"categories": 0, "uploads": 0, "time_zone": 0}
+	for _, user := range []string{alice, bob} {
+		if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), versionedRequest(user, 1, "2026-09", known, known)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, table := range []string{"user_data_state", "period_snapshot"} {
+		for _, bad := range []string{`{"uploads":null}`, `{"uploads":true}`, `{"uploads":0.0}`, `[]`} {
+			query := "UPDATE " + table + " SET data_revisions=$2 WHERE user_id=$1"
+			if _, err := env.App.DB.Primary().Exec(t.Context(), query, alice, bad); err != nil {
+				t.Fatal(err)
+			}
+			for _, read := range []func() error{
+				func() error {
+					_, err := c.analytics.GetAnalytics(apitest.Caller(t.Context(), "assistant"), &pb.GetAnalyticsRequest{UserId: proto.String(alice), PeriodKey: proto.String("2026-09")})
+					return err
+				},
+				func() error {
+					_, err := c.analytics.ListPeriods(apitest.User(t.Context(), alice), &pb.ListPeriodsRequest{})
+					return err
+				},
+			} {
+				if err := read(); status.Code(err) != codes.Internal {
+					t.Fatal("corrupt source claimed known provenance", table, bad, err)
+				}
+			}
+			foreign, err := c.analytics.GetAnalytics(apitest.User(t.Context(), bob), &pb.GetAnalyticsRequest{PeriodKey: proto.String("2026-09")})
+			if err != nil {
+				t.Fatal("corrupt tenant affected another user", err)
+			}
+			revisionsWant(t, foreign.DataRevisions, known)
+		}
+		query := "UPDATE " + table + " SET data_revisions=$2 WHERE user_id=$1"
+		if _, err := env.App.DB.Primary().Exec(t.Context(), query, alice, `{"categories":0,"uploads":0,"time_zone":0}`); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

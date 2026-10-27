@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 
@@ -21,8 +22,19 @@ func revisionsFromJSON(data []byte) (domain.Revisions, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
-	var values domain.Revisions
-	if json.Unmarshal(data, &values) != nil || values.Validate() != nil {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil {
+		return nil, errStoredRevisions
+	}
+	values := make(domain.Revisions, len(fields))
+	for code, raw := range fields {
+		var value int64
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &value) != nil {
+			return nil, errStoredRevisions
+		}
+		values[code] = value
+	}
+	if values.Validate() != nil {
 		return nil, errStoredRevisions
 	}
 	return values, nil

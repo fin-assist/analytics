@@ -264,6 +264,8 @@ func listPeriods(ctx context.Context, q querier, userID string, typ domain.Perio
 	}
 	if !havePeriod {
 		out.Revisions = stateRevisions
+	} else {
+		out.Revisions = out.Revisions.Intersect(stateRevisions)
 	}
 	return out, nil
 }

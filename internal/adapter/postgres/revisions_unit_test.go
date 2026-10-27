@@ -27,7 +27,7 @@ func TestUnitRevisionJSONPreservesInt64AndRejectsCorruptStorage(t *testing.T) {
 			t.Fatal(got, err)
 		}
 	}
-	for _, bad := range []string{`{`, `[]`, `{"uploads":-1}`, `{"uploads":9223372036854775808}`, `{"Upper":0}`} {
+	for _, bad := range []string{`{`, `[]`, `{"uploads":-1}`, `{"uploads":9223372036854775808}`, `{"Upper":0}`, `{"uploads":null}`, `{"uploads":0.0}`, `{"uploads":true}`, `{"uploads":"0"}`, `{"uploads":{}}`, `{"uploads":[]}`} {
 		if _, err := revisionsFromJSON([]byte(bad)); !errors.Is(err, errStoredRevisions) {
 			t.Fatal(bad, err)
 		}
@@ -65,6 +65,25 @@ func TestUnitPeriodProvenanceIntersectionDoesNotRestartAfterUnknownHeader(t *tes
 		tx = &scriptedTx{rows: map[string]*scriptedRows{"list": {values: [][]any{row}}}}
 		if _, err = listPeriods(t.Context(), tx, "u", domain.PeriodMonth); !errors.Is(err, errStoredRevisions) {
 			t.Fatal("corrupt stored list provenance accepted", column, err)
+		}
+	}
+}
+
+func TestUnitPeriodProvenanceIncludesUsedScreenState(t *testing.T) {
+	zone, key := "Europe/Moscow", "2026-09"
+	start, end, coverage := *instant(1), *instant(30), int16(1)
+	for _, state := range [][]byte{nil, []byte(`{"uploads":4,"categories":1}`)} {
+		tx := &scriptedTx{rows: map[string]*scriptedRows{"list": {values: [][]any{{&zone, &key, &start, &end, &coverage, state, []byte(`{"uploads":5,"categories":1}`)}}}}}
+		got, err := listPeriods(t.Context(), tx, "u", domain.PeriodMonth)
+		expected := 0
+		if state != nil {
+			expected = 1
+		}
+		if err != nil || len(got.Revisions) != expected {
+			t.Fatal(got, err)
+		}
+		if state != nil && got.Revisions["categories"] != 1 {
+			t.Fatal(got)
 		}
 	}
 }

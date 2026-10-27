@@ -78,7 +78,7 @@ and `testdb.DefaultImage` (PostgreSQL). Main pieces: grpc-go, protobuf, protoval
 prometheus client_golang, testcontainers-go, squawk; the fin-assist libraries above. A new dependency is named in
 the PR with why it is needed.
 
-FIN-369 persists bounded open source revisions in nullable JSONB on state and period headers. Legacy metadata stays unknown; GetAnalytics uses the selected header, ListPeriods intersects the headers its existing mode selection actually reads. Domain validation and DTO conversion refuse invalid revisions before writing with the existing bare internal ingest error. See docs/schema.md, «Ревизии исходных данных».
+FIN-369 persists bounded open source revisions in nullable JSONB on state and period headers. Legacy metadata stays unknown; GetAnalytics intersects the selected header with the used screen state; ListPeriods intersects the headers its existing mode selection actually reads with that state. Stored non-integer/null values fail closed instead of becoming known zero. Domain validation and DTO conversion refuse invalid revisions before writing with the existing bare internal ingest error. See docs/schema.md, «Ревизии исходных данных».
 
 ## Build in an agent container
 

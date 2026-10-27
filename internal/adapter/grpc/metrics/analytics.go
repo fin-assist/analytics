@@ -59,7 +59,7 @@ func (h *analytics) GetAnalytics(ctx context.Context, req *analyticsv1.GetAnalyt
 	}
 	revisions := screen.State.Revisions
 	if screen.Snapshot != nil {
-		revisions = screen.Snapshot.Revisions
+		revisions = screen.Snapshot.Revisions.Intersect(screen.State.Revisions)
 	}
 	response.DataRevisions = revisionMessages(revisions)
 	return response, nil
