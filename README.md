@@ -16,6 +16,17 @@
 
 [Политика Renovate](docs/renovate-policy.md) (FIN-211): одна актуальная release/main, автомерж полностью ботских PR после обязательного CI, один повтор красного CI и закрытие с явным повтором через Dependency Dashboard. AndroidX/Compose остаются на ручной проверке. Исходные группировки, ограничения версий и расписания — `renovate-base.json`; generated target и quarantine — ветка `renovate-policy`. Активация требует отдельного токена и строгой защиты веток; по умолчанию выключена.
 
+## Ревизии исходных данных (FIN-369)
+
+`analytics` сохраняет provenance из FIN-367 атомарно с метриками и состоянием. Ответ аналитики
+возвращает ревизии выбранного снимка, даже при более новом `recalculating`-состоянии; при отсутствии
+снимка и `has_data=false` — ревизии использованного состояния. Непустой `ListPeriods` возвращает
+только совпадающие известные ревизии всех фактически выбранных заголовков; пустой — состояние.
+Прежний снимок без metadata остаётся неизвестным. Неизвестные валидные коды и точные int64
+сохраняются, REST не получает внутреннюю provenance. Схема/инварианты — [docs/schema.md](docs/schema.md).
+Производитель этого metadata в bank-statement-data — отдельный PR FIN-369 после FIN-357;
+сравнение в истории помощника — FIN-368. Выкатка потребителя предшествует производителю.
+
 ## Что реализовано и что нет
 
 - **FIN-330** ([FIN-282](https://finassist.youtrack.cloud/issue/FIN-282), [FIN-283](https://finassist.youtrack.cloud/issue/FIN-283), [FIN-290](https://finassist.youtrack.cloud/issue/FIN-290)): `AUTH_MODE=verify` через `go-identity v0.2.0` `NewAssembly` (prod — Kubernetes ServiceAccount, stage — файлы ключей, переменные `AUTH_*` как в assistant), `go-tombstone v0.1.0` вместо `NoTombstones` (admission `TOKEN_REVOKED`, `Guard` в записи, источник миграций перед сервисным); `MetricsIngestService.UpsertUserMetrics`, `AnalyticsService.ListPeriods` и `UserDeletionService.PurgeUserData` по схеме FIN-113 и правилам записи contracts#60 ([docs/schema.md](docs/schema.md)); `make test-names` классифицирует fuzz-цели и отклоняет `Example…`.

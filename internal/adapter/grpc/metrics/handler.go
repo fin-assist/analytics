@@ -116,7 +116,7 @@ func (h *analytics) ListPeriods(ctx context.Context, req *analyticsv1.ListPeriod
 	if err != nil {
 		return nil, err
 	}
-	resp := &analyticsv1.ListPeriodsResponse{TimeZone: periods.TimeZone, Periods: make([]*analyticsv1.PeriodItem, 0, len(periods.Items))}
+	resp := &analyticsv1.ListPeriodsResponse{TimeZone: periods.TimeZone, DataRevisions: revisionMessages(periods.Revisions), Periods: make([]*analyticsv1.PeriodItem, 0, len(periods.Items))}
 	for _, p := range periods.Items {
 		resp.Periods = append(resp.Periods, &analyticsv1.PeriodItem{
 			Key:      p.Key,

@@ -301,11 +301,11 @@ func TestUnitListPeriodsTranslatesRows(t *testing.T) {
 		want    domain.Periods
 		wantErr error
 	}{
-		"periods": {rows: &scriptedRows{values: [][]any{{&zone, &key, &start, &end, &coverage}}},
+		"periods": {rows: &scriptedRows{values: [][]any{{&zone, &key, &start, &end, &coverage, nil, nil}}},
 			want: domain.Periods{TimeZone: zone, Items: []domain.PeriodItem{{Key: key, Start: start, End: end, Coverage: domain.CoverageComplete}}}},
-		"neither state nor periods": {rows: &scriptedRows{values: [][]any{{nil, nil, nil, nil, nil}}}},
-		"a state without periods":   {rows: &scriptedRows{values: [][]any{{&zone, nil, nil, nil, nil}}}, want: domain.Periods{TimeZone: zone}},
-		"a header without its data": {rows: &scriptedRows{values: [][]any{{&zone, &key, nil, &end, &coverage}}}, wantErr: errBrokenHeader},
+		"neither state nor periods": {rows: &scriptedRows{values: [][]any{{nil, nil, nil, nil, nil, nil, nil}}}},
+		"a state without periods":   {rows: &scriptedRows{values: [][]any{{&zone, nil, nil, nil, nil, nil, nil}}}, want: domain.Periods{TimeZone: zone}},
+		"a header without its data": {rows: &scriptedRows{values: [][]any{{&zone, &key, nil, &end, &coverage, nil, nil}}}, wantErr: errBrokenHeader},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -327,7 +327,7 @@ func TestUnitListPeriodsTranslatesRows(t *testing.T) {
 		}
 	}
 	// The repository reads through the transaction when there is one.
-	tx := &scriptedTx{rows: map[string]*scriptedRows{"list": {values: [][]any{{&zone, nil, nil, nil, nil}}}}}
+	tx := &scriptedTx{rows: map[string]*scriptedRows{"list": {values: [][]any{{&zone, nil, nil, nil, nil, nil, nil}}}}}
 	repo, db := unitRepository(tx)
 	if err := db.Run(context.Background(), func(ctx context.Context) error {
 		p, err := repo.ListPeriods(ctx, "u", domain.PeriodMonth)

@@ -230,3 +230,44 @@ WHERE m.user_id = $1 AND m.period_type = a.period_type AND m.period_key = a.peri
 2. **Фильтры метрик с `q` или суммами.** Сейчас снимок с ними отклоняется (правила `docs/calc.md` их не дают). Альтернатива — сразу завести колонки `filter_q`, `filter_amount_from_minor`, `filter_amount_to_minor` «на будущее»; не сделано, пока правило расчёта их не требует.
 
 FIN-5: default-чтение с `$3=NULL` проверяется тем же production `readAnalyticsRows`: исключение removed, populated-tenant isolation, границы года и index path (`TestIntegrationQueriesUsePrimaryKey`, включая generic prepared plan). `TestAPIGetAnalyticsDefaultIsOneSnapshotDuringConcurrentReplacement` выполняет 64 атомарных замены периодов/состояния/метрик/навигации и 128 чтений без period_key; подпись каждой версии проверяется целиком, без sleep.
+
+## Ревизии исходных данных (FIN-369)
+
+Миграция `000002_source_revisions` добавляет nullable `data_revisions jsonb` в `user_data_state`
+и `period_snapshot`. Это объект открытых кодов → точных int64; NULL, JSON null и пустой объект
+означают неизвестную provenance. Миграция не заполняет старые строки по нынешнему состоянию,
+времени или calc_version. JSONB сохраняет валидные неизвестные коды; значения ≥2^53 не проходят
+через float. Старые финансовые колонки и ключи остаются прежними. Down удаляет только новую
+metadata; при возврате к новому consumer старые снимки остаются unknown до новой публикации.
+
+`UpsertState` и пакетный `UpsertPeriods` записывают metadata теми же параметризованными SQL и
+в той же транзакции, что соответствующий финансовый payload. Нижняя calc_version не меняет
+ни факты, ни provenance; повтор той же версии применяет тот же неизменяемый payload.
+Как в FIN-283, неизменность содержимого одной версии обеспечивает производитель: analytics
+не вводит отдельный hash или новую проверку совпадения payload при равной версии.
+
+`GetAnalytics` читает всё одним statement snapshot. При наличии выбранного снимка возвращает
+его metadata, даже когда состояние пользователя новее и имеет `recalculating=true`. Подстановка
+более свежего состояния в старый снимок запрещена. Нет выбранного снимка либо `has_data=false`
+— используется metadata состояния. У ответа `has_data=false` допустима только новая внутренняя
+provenance, прежние финансовые поля остаются отсутствующими.
+
+`ListPeriods` сохраняет прежний алгоритм DISTINCT ON: у каждого ключа периода используется
+заголовок наибольшего transfer_mode. Producer обязан присылать оба режима атомарно с одинаковыми
+ревизиями. Если частичная доставка оставила выбранный режим старым, берётся именно его provenance.
+Для непустого списка код известен только при одинаковом известном значении у всех выбранных
+заголовков; отсутствующий/расходящийся код не заменяется metadata состояния. При пустом списке
+используется metadata состояния. Таким образом частичная/legacy история явно оставляет часть
+ревизий неизвестными; assistant FIN-368 возвращает `unverified`, а не подтверждение актуальности.
+
+| Инвариант в коде сервиса | Проверка |
+| --- | --- |
+| Не более32 записей, уникальный code, ASCII `[a-z][a-z0-9_]{0,63}`, значение ≥0; unknown valid code сохраняется. Неверная metadata любого state/period отклоняет весь ingest bare INVALID_ARGUMENT до эффектов | `TestUnitRevisionMetadataIsOpenBoundedAndExact`, `TestUnitRevisionConversionPreservesOpenCodesWithoutLoss`, `TestAPISourceRevisionsRejectInvalidWholeBatch` и integration-эквивалент |
+| Метаданные принадлежат конкретному выбранному снимку/состоянию; lower-version/retry не искажают provenance; last delete/purge/late write не воскрешают данные | `TestAPISourceProvenanceBelongsToSelectedSnapshot` и integration-эквивалент |
+| Пустая/частичная/legacy metadata не получает ложную baseline; ListPeriods возвращает per-code intersection | те же реальные PG/gRPC сценарии + `TestIntegrationProvenanceUpgradeDoesNotInventLegacyBaselines` |
+| Хранимые invalid JSON/negative/overflowed revisions дают внутреннюю ошибку чтения, не пользовательскую validation и не тихое подтверждение свежести | `TestUnitRevisionJSONPreservesInt64AndRejectsCorruptStorage`, `TestUnitAnalyticsReadRejectsCorruptStoredProvenance` |
+
+Порядок внедрения: опубликованный контрактный тег → этот analytics consumer и BFF с текстом
+новых changed_since → revision-aware producer → assistant с сохранённой baseline. Временный
+локальный Go replace не является выпуском/основанием сервисного PR; production зависимости
+закрепляются опубликованным тегом до PR. Фактическая выкладка и публикация тега — отдельно.

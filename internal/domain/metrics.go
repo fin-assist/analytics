@@ -160,6 +160,7 @@ type Metric struct {
 
 // Snapshot is a PeriodSnapshot: the full content of a period in one transfer mode.
 type Snapshot struct {
+	Revisions        Revisions
 	Key              SnapshotKey
 	Range            *TimeRange
 	Coverage         Coverage
@@ -172,6 +173,7 @@ type Snapshot struct {
 
 // State is UserDataState.
 type State struct {
+	Revisions                   Revisions
 	HasData                     bool
 	DataFrom, DataTo            *time.Time
 	LastOperationAt, StaleAfter *time.Time
@@ -266,6 +268,9 @@ func (u Upsert) IncompletePeriods() []PeriodKey {
 
 // Validate checks a snapshot and its metrics.
 func (s *Snapshot) Validate() error {
+	if err := s.Revisions.Validate(); err != nil {
+		return err
+	}
 	if err := s.Key.Validate(); err != nil {
 		return err
 	}
@@ -355,6 +360,9 @@ const maxTimeZone = 64
 
 // Validate checks UserDataState.
 func (s *State) Validate() error {
+	if err := s.Revisions.Validate(); err != nil {
+		return err
+	}
 	if s.CalculatedAt == nil {
 		return invalid("state without calculated_at")
 	}
@@ -408,6 +416,7 @@ type PeriodItem struct {
 // Periods is the answer of ListPeriods: periods of one type, newest first, and the zone
 // they were calculated in (empty: no state yet).
 type Periods struct {
-	TimeZone string
-	Items    []PeriodItem
+	Revisions Revisions
+	TimeZone  string
+	Items     []PeriodItem
 }

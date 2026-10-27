@@ -99,10 +99,10 @@ func TestIntegrationCommandServiceMigrationsAndVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := runMigrate(t.Context(), []string{"version"}, &out); err != nil || out.String() != "tombstone\t1\nservice\t1\n" {
+	if err := runMigrate(t.Context(), []string{"version"}, &out); err != nil || out.String() != "tombstone\t1\nservice\t2\n" {
 		t.Fatalf("version=%q err=%v", out.String(), err)
 	}
-	for _, args := range [][]string{{"down", "service", "1"}, {"down", "tombstone", "1"}, {"up"}, {"force", "service", "1"}} {
+	for _, args := range [][]string{{"down", "service", "1"}, {"down", "tombstone", "1"}, {"up"}, {"force", "service", "2"}} {
 		if err := runMigrate(t.Context(), args, &bytes.Buffer{}); err != nil {
 			t.Fatalf("migration operation %v: %v", args, err)
 		}
