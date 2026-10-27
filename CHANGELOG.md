@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- FIN-148: CI сохраняет stage-бинарь из проверенного образа с SHA, manifest и контрольной суммой.
+
 ### Добавлено
 
 - `MetricsIngestService.UpsertUserMetrics`: проверка всего пакета по правилам «Инвариантов в коде сервиса» (`internal/domain`, голый `INVALID_ARGUMENT`, в том числе для `METRIC_STATUS_UNAVAILABLE` от производителя и периода и в снимках, и в удалениях), одна транзакция READ COMMITTED: tombstone guard, состояние, заголовки и метки, пропуски и метрики применённых ключей; удаление периода сравнивается с бо́льшей из версий двух режимов, версия метки только растёт; `lock.text` производителя игнорируется; `user_id` на границе приводится к каноническому нижнему регистру UUID, чтобы вызовы одного пользователя в разном регистре сериализовались на одном tombstone guard и совпадали с `sub`; период с одним режимом — предупреждение и `finassist_incomplete_period_snapshots_total{period_type}`. `AnalyticsService.ListPeriods` (смешанная модель: `bank-bff` с токеном пользователя, `assistant` с `user_id`) и `UserDeletionService.PurgeUserData` (`go-tombstone`); строки `AccessPolicy()` по grpc-api.md 3.3. `GetAnalytics` — FIN-5, отвечает `UNIMPLEMENTED` (FIN-283).
