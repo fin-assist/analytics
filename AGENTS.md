@@ -15,6 +15,10 @@ updates them in the same PR. A service made from the template rewrites the first
   `go test ./internal/config -run TestUnitDocIsCurrent -update`. `go test` fails on a stale table, on a variable read
   but not declared, and on one declared but never read.
 
+## Stage artifacts (FIN-148)
+
+`scripts/stage_artifact.py` extracts the binary from the smoke-tested image; `docs/stage-artifacts.md` describes provenance, checks and retention. Keep its Python tests and CI image job in sync. Artifacts do not authorize deployment; only a successful main push CI is eligible for stage. GHCR/production delivery is still pending.
+
 ## Where things are decided
 
 - Contracts: `fin-assist/contracts` — `docs/api.md` (REST), `docs/grpc-api.md` (services, call models, metadata,
