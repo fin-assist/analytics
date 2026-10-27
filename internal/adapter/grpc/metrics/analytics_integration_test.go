@@ -296,10 +296,35 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	req = analyticsFixture(t)
 	req.CalcVersion = 245
 	req.State.TimeZone = "UTC"
+	req.State.Recalculating = true
 	write()
 	rebuilt := read(&analyticsv1.GetAnalyticsRequest{})
-	if screenBlock(rebuilt, "tiles").Data.AsMap()["tiles"].([]any)[1].(map[string]any)["caption"] != "на сентябрь" {
-		t.Fatal("forecast caption shifted during timezone rebuild")
+	assertRebuiltCalendar(t, rebuilt, req.Periods[0])
+	// The opposite direction would shift an exclusive end into the next month in the new zone.
+	rawUTC, e := os.ReadFile("../../../../testdata/analytics.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	req = &analyticsv1.UpsertUserMetricsRequest{}
+	if e = protojson.Unmarshal([]byte(strings.ReplaceAll(string(rawUTC), "+03:00", "Z")), req); e != nil {
+		t.Fatal(e)
+	}
+	req.CalcVersion = 247
+	req.State.TimeZone = "Europe/Moscow"
+	req.State.Recalculating = true
+	write()
+	rebuilt = read(&analyticsv1.GetAnalyticsRequest{})
+	assertRebuiltCalendar(t, rebuilt, req.Periods[0])
+	// A missing group filter must retain a valid metric-level transition.
+	smallMetric := screenMetric(req, "insights.small_frequent")
+	smallMetric.Filters = proto.Clone(smallMetric.GetSmallFrequent().Items[0].Filters).(*commonv1.OperationsFilter)
+	smallMetric.Filters.Selection = proto.String("s_small_metric")
+	smallMetric.GetSmallFrequent().Items[0].Filters = nil
+	req.CalcVersion = 248
+	write()
+	rebuilt = read(&analyticsv1.GetAnalyticsRequest{})
+	if screenBlock(rebuilt, "small_frequent").Action.GetFilter().GetSelection() != "s_small_metric" {
+		t.Fatal("metric fallback action erased")
 	}
 	// Empty statements are distinct from missing snapshots while the user has other operations.
 	req = analyticsFixture(t)
@@ -309,5 +334,38 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	got = read(&analyticsv1.GetAnalyticsRequest{})
 	if got.HasData || got.Params != nil || got.State != nil || len(got.Blocks) > 0 {
 		t.Fatalf("empty %+v", got)
+	}
+}
+
+func assertRebuiltCalendar(t *testing.T, r *analyticsv1.GetAnalyticsResponse, source *analyticsv1.PeriodSnapshot) {
+	t.Helper()
+	tiles := screenBlock(r, "tiles").Data.AsMap()["tiles"].([]any)
+	if tiles[1].(map[string]any)["caption"] != "на сентябрь" || tiles[2].(map[string]any)["caption"] != "в августе — 2 890 ₽" {
+		t.Fatal("tile calendar shifted", tiles)
+	}
+	if !strings.HasPrefix(screenBlock(r, "small_frequent").Data.AsMap()["description"].(string), "по августу ·") || !strings.HasSuffix(screenBlock(r, "regular_payments").Data.AsMap()["description"].(string), "с июня") {
+		t.Fatal("observation basis shifted")
+	}
+	if !strings.Contains(screenBlock(r, "notable_spending").Data.AsMap()["description"].(string), "(июнь — август)") {
+		t.Fatal("notable basis shifted")
+	}
+	chart := screenBlock(r, "monthly_chart")
+	if !strings.Contains(chart.GetAltText(), "август 70 000 ₽, сентябрь 84 320 ₽") {
+		t.Fatal(chart.GetAltText())
+	}
+	notes := chart.Data.AsMap()["notes"].([]any)
+	if !strings.Contains(notes[1].(map[string]any)["text"].(string), "июнь — август") {
+		t.Fatal(notes)
+	}
+	if screenBlock(r, "expense_categories").Data.AsMap()["total"].(map[string]any)["label"] != "Всего · 1–25 сентября" {
+		t.Fatal("covered-day caption shifted")
+	}
+	if !proto.Equal(r.Period.Range, source.Range) || !proto.Equal(r.Period.Bounds.DataFrom, source.Bounds.DataFrom) || !proto.Equal(r.Period.Bounds.DataTo, source.Bounds.DataTo) {
+		t.Fatal("stored financial boundaries changed")
+	}
+	point := chart.Data.AsMap()["points"].([]any)[1].(map[string]any)
+	instant, e := time.Parse(time.RFC3339Nano, point["data_to"].(string))
+	if e != nil || !instant.Equal(source.Bounds.DataTo.AsTime()) || point["note"] != "по 25-е" {
+		t.Fatal("point instant/note changed", point, e)
 	}
 }

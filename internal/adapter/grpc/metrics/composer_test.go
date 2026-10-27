@@ -473,7 +473,8 @@ func TestUnitComposerCountersAndMalformedPresentationFacts(t *testing.T) {
 	if dayRange(from, to) != "31 декабря 2025 — 2 января 2026" || dayRange(from, from) != "31 декабря" {
 		t.Fatal("cross-year day text")
 	}
-	if monthRange(&commonv1.TimeRange{Start: timestamp(&from), End: timestamp(&to)}, time.UTC) != "декабрь 2025 — январь 2026" {
+	basisFrom, basisTo := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	if monthRange(&commonv1.TimeRange{Start: timestamp(&basisFrom), End: timestamp(&basisTo)}, time.UTC) != "декабрь 2025 — январь 2026" {
 		t.Fatal("cross-year month text")
 	}
 	if coverage(99) != "" || coverage(commonv1.Coverage_COVERAGE_NO_DATA) != "no_data" {

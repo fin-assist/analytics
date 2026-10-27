@@ -47,7 +47,7 @@ func (p composition) insight(ctx context.Context, id string) ([]*commonv1.Block,
 			description += fmt.Sprintf(" · %d %s каждый месяц", r.GetCount(), noun(int64(r.GetCount()), "списание", "списания", "списаний"))
 		}
 		if m.GetBasis().GetRange().GetStart() != nil {
-			description += " с " + monthGen[m.Basis.Range.Start.AsTime().In(p.zone).Month()-1]
+			description += " с " + monthGen[calendarMonth(m.Basis.Range.Start, p.calendar()).Month()-1]
 		}
 		d["description"] = description
 		items := []any{}
@@ -93,7 +93,7 @@ func (p composition) insight(ctx context.Context, id string) ([]*commonv1.Block,
 				description = fmt.Sprintf("В %.1f раза больше обычного — обычно около %s", float64(row.AmountMinor)/float64(row.TypicalAmountMinor), money(row.TypicalAmountMinor))
 				description = strings.Replace(description, ".", ",", 1)
 			}
-			if basis := monthRange(m.GetBasis().GetRange(), p.zone); basis != "" {
+			if basis := monthRange(m.GetBasis().GetRange(), p.calendar()); basis != "" {
 				description += " (" + basis + ")"
 			}
 			one.Data, err = data(map[string]any{"icon": row.CategoryIcon, "title": row.CategoryName, "value": row.AmountMinor, "value_kind": "amount", "description": description})
@@ -134,13 +134,15 @@ func (p composition) insight(ctx context.Context, id string) ([]*commonv1.Block,
 				items = append(items, item)
 			}
 			if i == 0 {
-				b.Action = blockAction(row.Filters, p.zone)
+				if a := blockAction(row.Filters, p.zone); a != nil {
+					b.Action = a
+				}
 				description := fmt.Sprintf("в месяц · %s: %d %s по %s — около %s в год", row.Title, row.Count, noun(int64(row.Count), "раз", "раза", "раз"), money(row.AverageAmountMinor), money(row.YearlyAmountMinor))
 				if m.GetBasis().GetRange().GetStart() != nil {
-					base := m.Basis.Range.Start.AsTime().In(p.zone)
+					base := calendarMonth(m.Basis.Range.Start, p.calendar())
 					if base.Format("2006-01") != p.s.Key.Key {
 						prefix := "по " + monthDat[base.Month()-1]
-						if base.Year() != p.s.Range.Start.In(p.zone).Year() {
+						if fmt.Sprintf("%04d", base.Year()) != p.s.Key.Key[:4] {
 							prefix += fmt.Sprintf(" %d", base.Year())
 						}
 						description = prefix + " · " + description
@@ -161,7 +163,7 @@ func (p composition) emptyInsight(id string, m *analyticsv1.Metric) string {
 	switch id {
 	case "regular_payments":
 		text := "Регулярных платежей не нашли"
-		if basis := monthRange(m.GetBasis().GetRange(), p.zone); basis != "" {
+		if basis := monthRange(m.GetBasis().GetRange(), p.calendar()); basis != "" {
 			text += " за " + basis
 		}
 		return text

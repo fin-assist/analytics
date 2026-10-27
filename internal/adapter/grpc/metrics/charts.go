@@ -50,7 +50,7 @@ func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, err
 		if point.ExpenseMinor != nil {
 			v = money(point.GetExpenseMinor())
 		}
-		alt = append(alt, monthNom[point.Range.Start.AsTime().In(p.zone).Month()-1]+" "+v)
+		alt = append(alt, monthName(point.Month, monthNom)+" "+v)
 	}
 	d := map[string]any{"kind": "bar", "value_kind": "amount", "points": points, "notes": p.chartNotes(chart.Points)}
 	if p.s.Key.Type != domain.PeriodYear && len(points) > 0 {
@@ -138,7 +138,7 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 			}
 		}
 		if peak != nil {
-			notes = append(notes, map[string]any{"text": "Больше всего — в " + monthPrep[peak.GetRange().GetStart().AsTime().In(p.zone).Month()-1] + ": " + money(peak.GetExpenseMinor()), "tone": "primary"})
+			notes = append(notes, map[string]any{"text": "Больше всего — в " + monthName(peak.Month, monthPrep) + ": " + money(peak.GetExpenseMinor()), "tone": "primary"})
 		}
 	}
 	if p.s.Key.Type == domain.PeriodYear {
@@ -154,9 +154,9 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 				break
 			}
 			if point.ExpenseMinor == nil {
-				parts = append(parts, point.Month+": в выписке нет операций")
+				parts = append(parts, monthName(point.Month, monthNom)+": в выписке нет операций")
 			} else if note := p.barNote(point); note != "" {
-				parts = append(parts, point.Month+" — "+note)
+				parts = append(parts, monthName(point.Month, monthNom)+" — "+note)
 			}
 		}
 		if len(parts) > 0 {
@@ -166,7 +166,7 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 		typical, err := p.get("tiles.expense.typical")
 		if err == nil && ready(typical) && typical.ValueMinor != nil {
 			text := "Обычно около " + money(typical.GetValueMinor())
-			if basis := monthRange(typical.GetBasis().GetRange(), p.zone); basis != "" {
+			if basis := monthRange(typical.GetBasis().GetRange(), p.calendar()); basis != "" {
 				text += " — " + basis
 			}
 			notes = append(notes, map[string]any{"text": text, "tone": "muted"})
