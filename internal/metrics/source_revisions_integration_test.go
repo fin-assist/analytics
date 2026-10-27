@@ -222,36 +222,111 @@ func TestIntegrationDomainRevisionReadsStayCoherentDuringConcurrentCommits(t *te
 	e := start(t)
 	user := userID(507)
 	applyRevisionBatch(t, e, revisionBatch(user, 1, "2026-09", domain.Revisions{"uploads": 1}))
-	ready := make(chan struct{})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	type commitStep struct {
+		version     int32
+		allowCommit chan struct{}
+		observed    chan struct{}
+	}
+	prepared := make(chan commitStep)
+	committed := make(chan int32)
 	done := make(chan error, 1)
 	go func() {
-		<-ready
-		for version := int32(2); version <= 20; version++ {
-			u := revisionBatch(user, version, "2026-09", domain.Revisions{"uploads": int64(version)})
-			if _, err := e.uc.Upsert(t.Context(), u); err != nil {
+		for version := int32(2); version <= 5; version++ {
+			step := commitStep{version: version, allowCommit: make(chan struct{}), observed: make(chan struct{})}
+			err := e.db.Run(ctx, func(txctx context.Context) error {
+				u := revisionBatch(user, version, "2026-09", domain.Revisions{"uploads": int64(version)})
+				if _, err := e.uc.Upsert(txctx, u); err != nil {
+					return err
+				}
+				// The new facts and envelopes exist in an open transaction.
+				// The reader must see the previous committed pair at this point.
+				select {
+				case prepared <- step:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				select {
+				case <-step.allowCommit:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			})
+			if err != nil {
 				done <- err
+				return
+			}
+			// Run has committed. Do not advance or finish until the reader has
+			// observed this intermediate committed version through the repository.
+			select {
+			case committed <- version:
+			case <-ctx.Done():
+				done <- ctx.Err()
+				return
+			}
+			select {
+			case <-step.observed:
+			case <-ctx.Done():
+				done <- ctx.Err()
 				return
 			}
 		}
 		done <- nil
 	}()
-	close(ready)
 	key := "2026-09"
-	for range 40 {
-		data, err := e.repo.ReadAnalytics(t.Context(), user, domain.PeriodMonth, &key, domain.TransferWith)
+	observedVersions := map[int32]bool{}
+	readVersion := func(want int32) {
+		t.Helper()
+		data, err := e.repo.ReadAnalytics(ctx, user, domain.PeriodMonth, &key, domain.TransferWith)
 		if err != nil || data.State == nil || data.Snapshot == nil {
 			t.Fatal(data, err)
 		}
-		// The independently version-labelled financial fields and source map must
-		// belong to one committed transaction, even while another writer commits.
-		if data.State.FullMonths != data.Snapshot.UnreadLines || data.State.Revisions["uploads"] != int64(data.State.FullMonths) || data.Snapshot.Revisions["uploads"] != int64(data.Snapshot.UnreadLines) {
-			t.Fatal("mixed committed financial/provenance versions", data)
+		if data.State.FullMonths != want || data.Snapshot.UnreadLines != want || data.State.Revisions["uploads"] != int64(want) || data.Snapshot.Revisions["uploads"] != int64(want) {
+			t.Fatal("mixed or wrong committed financial/provenance version", want, data)
 		}
+		observedVersions[data.State.FullMonths] = true
+	}
+	for version := int32(2); version <= 5; version++ {
+		var step commitStep
+		select {
+		case step = <-prepared:
+		case err := <-done:
+			t.Fatal("writer finished before staging every commit", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		if step.version != version {
+			t.Fatal("unexpected staged version", step.version, version)
+		}
+		readVersion(version - 1)
+		close(step.allowCommit)
+		select {
+		case got := <-committed:
+			if got != version {
+				t.Fatal("unexpected committed version", got, version)
+			}
+		case err := <-done:
+			t.Fatal("writer stopped before commit observation", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		readVersion(version)
+		select {
+		case err := <-done:
+			t.Fatal("writer finished before the reader acknowledged this version", err)
+		default:
+		}
+		close(step.observed)
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	checkRevisionList(t, e, user, domain.PeriodMonth, 1, domain.Revisions{"uploads": 20})
+	if len(observedVersions) != 5 {
+		t.Fatal("reader did not observe distinct intermediate commits", observedVersions)
+	}
+	checkRevisionList(t, e, user, domain.PeriodMonth, 1, domain.Revisions{"uploads": 5})
 }
 
 func TestIntegrationDomainPeriodsIntersectEverySelectedHeaderWithState(t *testing.T) {
