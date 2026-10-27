@@ -254,7 +254,8 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Fatal("partial failure")
 	}
 	exec(`UPDATE period_metric SET details='{"monthly_chart":"broken"}'::jsonb WHERE user_id='01a107db-ae80-7b07-b8a1-00000000a11c' AND metric_id='monthly_chart'`)
-	if _, err := client.GetAnalytics(userCtx, &analyticsv1.GetAnalyticsRequest{Supports: []*commonv1.BlockSupport{{Type: "chart", MaxVersion: 1}}}); status.Code(err) != codes.Internal {
+	if _, err := client.GetAnalytics(userCtx, &analyticsv1.GetAnalyticsRequest{Supports: []*commonv1.BlockSupport{{Type: "chart", MaxVersion: 1}}}); status.Code(err) != codes.Unknown {
+		// This transport intentionally omits the production error interceptor; the API suite checks INTERNAL.
 		t.Fatalf("all requested blocks failed: %v", err)
 	}
 	for _, r := range []*analyticsv1.GetAnalyticsRequest{{Period: 99}, {TransferMode: 99}, {PeriodKey: proto.String("2026")}, {PeriodKey: proto.String("2026-99")}, {Period: 2, PeriodKey: proto.String("2026-Q8")}} {
