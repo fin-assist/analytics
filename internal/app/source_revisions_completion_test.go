@@ -13,9 +13,6 @@ import (
 func TestAPISourceProvenanceRequiresFinalCompletionProof(t *testing.T) {
 	completionProofScenario(t)
 }
-func TestIntegrationSourceProvenanceRequiresFinalCompletionProof(t *testing.T) {
-	completionProofScenario(t)
-}
 
 func completionProofScenario(t *testing.T) {
 	_, c := startAPI(t)

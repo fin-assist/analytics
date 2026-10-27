@@ -106,6 +106,11 @@ make test   # Docker for testcontainers, or TEST_DATABASE_URL=postgres://... to 
 make lint
 ```
 
+Integration-проверки provenance напрямую связывают domain-сервисы, реальные транзакции, tombstone guard
+и PostgreSQL-репозиторий (`internal/metrics/source_revisions_*integration_test.go`). Публичные gRPC-сценарии
+полной сборки остаются только API (`internal/app/source_revisions_*test.go`); один API helper не дублируется
+под Integration-именем ради покрытия.
+
 ### Покрытие statements по трём наборам (FIN-238)
 
 Для **каждого** набора `unit`, `integration` и `api` обязателен порог **80% statements всего production-кода сервиса**. Сбор — штатный Go coverage, проверка — `vladopajic/go-test-coverage/v2` **v2.20.1**. Общий результат `combined` показывает объединение профилей силами инструмента; он не компенсирует провал отдельного набора. Внешнего сервиса отчётности нет.

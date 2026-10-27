@@ -67,9 +67,6 @@ RETURNING s.period_type, s.period_key, s.transfer_mode, s.removed`
 func TestAPIRollbackWritesCannotCertifyOldSourceProvenance(t *testing.T) {
 	rollbackProvenanceScenario(t)
 }
-func TestIntegrationRollbackWritesCannotCertifyOldSourceProvenance(t *testing.T) {
-	rollbackProvenanceScenario(t)
-}
 
 func rollbackProvenanceScenario(t *testing.T) {
 	for _, tc := range []struct {

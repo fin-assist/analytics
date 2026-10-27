@@ -56,8 +56,7 @@ func versionedRequest(user string, version int32, key string, state, period map[
 	}
 	return req
 }
-func TestAPISourceProvenanceBelongsToSelectedSnapshot(t *testing.T)         { provenanceScenario(t) }
-func TestIntegrationSourceProvenanceBelongsToSelectedSnapshot(t *testing.T) { provenanceScenario(t) }
+func TestAPISourceProvenanceBelongsToSelectedSnapshot(t *testing.T) { provenanceScenario(t) }
 func provenanceScenario(t *testing.T) {
 	env, c := startAPI(t)
 	ctx := t.Context()
@@ -167,9 +166,6 @@ func provenanceScenario(t *testing.T) {
 }
 
 func TestAPISourceRevisionsRejectInvalidWholeBatch(t *testing.T) { invalidProvenanceScenario(t) }
-func TestIntegrationSourceRevisionsRejectInvalidWholeBatch(t *testing.T) {
-	invalidProvenanceScenario(t)
-}
 func invalidProvenanceScenario(t *testing.T) {
 	env, c := startAPI(t)
 	ctx := t.Context()
@@ -212,9 +208,6 @@ func invalidProvenanceScenario(t *testing.T) {
 }
 
 func TestAPIResponseProvenanceIncludesStateAndSnapshot(t *testing.T) { responseProvenanceScenario(t) }
-func TestIntegrationResponseProvenanceIncludesStateAndSnapshot(t *testing.T) {
-	responseProvenanceScenario(t)
-}
 func responseProvenanceScenario(t *testing.T) {
 	for _, order := range []string{"period-then-state", "state-then-period", "legacy-state"} {
 		t.Run(order, func(t *testing.T) {
@@ -264,8 +257,7 @@ func responseProvenanceScenario(t *testing.T) {
 	}
 }
 
-func TestAPIStoredRevisionNullIsNotKnownZero(t *testing.T)         { corruptRevisionScenario(t) }
-func TestIntegrationStoredRevisionNullIsNotKnownZero(t *testing.T) { corruptRevisionScenario(t) }
+func TestAPIStoredRevisionNullIsNotKnownZero(t *testing.T) { corruptRevisionScenario(t) }
 func corruptRevisionScenario(t *testing.T) {
 	env, c := startAPI(t)
 	known := map[string]int64{"categories": 0, "uploads": 0, "time_zone": 0}

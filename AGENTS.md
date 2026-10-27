@@ -203,6 +203,11 @@ Priorities when they pull apart, in this order:
 
 ## Tests
 
+Business suite boundaries are independent: integration calls domain services/adapters with real
+PostgreSQL transactions/repositories. Full-assembly scenarios using generated public gRPC clients
+belong to API only; duplicating their helper under an integration name does not establish an
+integration suite or its coverage threshold.
+
 Every change comes with its automated tests in the same PR — not in a follow-up. Three levels, each mandatory:
 
 - **Unit tests — all new code.** Every new or changed function or method with logic (domain rules, usecases,
@@ -358,6 +363,8 @@ it. Check:
 - New dependencies: flag a new library that gets network, storage or data access, so the owner decides on it.
 
 ### Tests
+
+Check the independent suite boundaries in Tests; duplicated public RPC helpers do not count as integration coverage.
 
 The criterion is whether the use cases of the changed functionality are covered; the independent 80% statements
 gates in Tests are minimums, and meeting them does not settle this check. For
