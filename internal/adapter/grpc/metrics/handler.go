@@ -2,7 +2,7 @@
 // MetricsIngestService.UpsertUserMetrics from bank-statement-data and
 // AnalyticsService.ListPeriods from bank-bff and assistant. Handlers convert messages and
 // call the usecase; identity and the access table are the server's interceptors
-// (grpc-api.md 3.3). GetAnalytics is FIN-5 and answers UNIMPLEMENTED until then.
+// (grpc-api.md 3.3). GetAnalytics resolves and composes stored metrics (FIN-5).
 package metrics
 
 import (
@@ -32,11 +32,16 @@ type Usecase interface {
 	Periods(ctx context.Context, userID string, typ domain.PeriodType) (domain.Periods, error)
 }
 
+// ScreenUsecase resolves the persisted screen without calculating financial metrics.
+type ScreenUsecase interface {
+	Get(context.Context, string, domain.PeriodType, *string, domain.TransferMode) (domain.Analytics, error)
+}
+
 // Register registers MetricsIngestService and AnalyticsService on s. log records the
 // refused batches of the producer without their content.
-func Register(s *grpc.Server, uc Usecase, log *slog.Logger) {
+func Register(s *grpc.Server, uc Usecase, screen ScreenUsecase, composer *Composer, log *slog.Logger) {
 	analyticsv1.RegisterMetricsIngestServiceServer(s, &ingest{uc: uc, log: log})
-	analyticsv1.RegisterAnalyticsServiceServer(s, &analytics{uc: uc})
+	analyticsv1.RegisterAnalyticsServiceServer(s, &analytics{uc: uc, screen: screen, composer: composer})
 }
 
 // invalidArgument is the bare refusal of a request that breaks the rules of the contract
@@ -84,7 +89,9 @@ func bounded(rule string) string {
 
 type analytics struct {
 	analyticsv1.UnimplementedAnalyticsServiceServer
-	uc Usecase
+	uc       Usecase
+	screen   ScreenUsecase
+	composer *Composer
 }
 
 // ListPeriods answers both models of the method (grpc-api.md 3.2): with a user token the

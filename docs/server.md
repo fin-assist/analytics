@@ -12,7 +12,7 @@
 | `analytics.MetricsIngestService/*` | `bank-statement-data` | системный |
 | `userdeletion.UserDeletionService/*` | `user` | системный |
 
-Обработчики FIN-283: `UpsertUserMetrics`, `ListPeriods` (`internal/adapter/grpc/metrics`) и `PurgeUserData` (`DeletionServer` библиотеки `go-tombstone`). `GetAnalytics` — FIN-5: зарегистрирован в составе `AnalyticsService` и до реализации отвечает `UNIMPLEMENTED`. Клиентов соседей и фоновых заданий, кроме обновления ключей identity, нет. Health и dev reflection принадлежат инфраструктурной сборке.
+Обработчики FIN-283: `UpsertUserMetrics`, `ListPeriods` (`internal/adapter/grpc/metrics`) и `PurgeUserData` (`DeletionServer` библиотеки `go-tombstone`). `GetAnalytics` (FIN-5) реализован в той же смешанной модели, что `ListPeriods`: пользователь из проверенного `sub`, системный `assistant` указывает `user_id`. Поддерживаются точный/последний период, оба режима переводов, `supports`, `analytics_order:b` (категории перед плитками), серверные тексты всех MVP-блоков. Неизвестные эксперименты игнорируются; несовместимые примитивы пропускаются. Устаревшие поля ответа 5–9 не заполняются: BFF читает `blocks`. Клиентов соседей и фоновых заданий, кроме обновления ключей identity, нет. Health и dev reflection принадлежат инфраструктурной сборке.
 
 Обработчики остаются в `internal/adapter/grpc/<feature>/`, usecase — в `internal/<feature>/`. Данные контекста читаются через `github.com/fin-assist/go-grpc/reqctx`; локального `internal/reqctx` нет. Ошибки контракта создаются через `finerr`; внутренние bare status создаёт только библиотека `go-grpc/server`. Запрет обхода `finerr` в `.golangci.yml` сохраняется.
 
@@ -47,3 +47,11 @@ Logger и Prometheus registry создаёт сервис и явно перед
 | `finassist_identity_rejected_total`, `finassist_identity_jwks_skipped_keys` | по README `go-identity` | отказы проверки токенов и пропущенные ключи JWKS (`go-identity`) |
 
 `internal/logx` использует значения из `go-grpc/reqctx`. Логи не раскрывают токены, ключи, DSN и банковские данные; параметры маскирования и безопасного сообщения об ошибке задаёт контракт библиотеки. `/metrics`, `/healthz`, `/readyz` и readiness ping primary остаются в `internal/ops` и сборке сервиса. Библиотеки регистрируют метрики только в переданном реестре; process-wide logger/registry нет.
+
+## Композиция GetAnalytics (FIN-5)
+
+`internal/metrics/Screen` нормализует месяц → квартал/год, проверяет ключ и вычисляет `is_current`/`stale` по внедрённым часам. Репозиторий одним SQL читает default key, состояние, заголовок, пропуски, метрики и соседей: части ответа принадлежат одному MVCC-снимку, чтение следует `x-read-primary`. Финансовые формулы и пороги не пересчитываются; сохранённый `definition_version` не сравнивается с текущим каталогом.
+
+`Composer` строит блоки последовательно с отдельным контекстом и лимитом 250 мс на блок. Длительные циклы проверяют отмену; результат просроченного построения не используется. Ошибка деталей или число вне точного диапазона `Struct` (±(2^53−1)) даёт `unavailable` только своему блоку. Если ошибка построения произошла у всех запрошенных содержательных блоков — `INTERNAL`; отсутствие снимка или новой метрики само по себе не ошибка построения: экран с `coverage=no_data` и `unavailable` допустим. `has_data=false` не несёт остальные поля. Пустой результат фильтрации `supports` допустим.
+
+Метрики композиции: `finassist_analytics_blocks_total{block_id}` и `finassist_analytics_blocks_unavailable_total{block_id}`; отношение счётчиков — доля недоступных блоков. Метка ограничена встроенными `tiles`, `monthly_chart`, `expense_categories`, `income_categories`, `regular_payments`, `notable_spending`, `bank_fees`, `small_frequent`, `balance`. Эксперимент, пользователь, категория и содержимое снимка в метки не попадают.

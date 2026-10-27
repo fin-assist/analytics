@@ -409,9 +409,9 @@ func TestAPIListPeriodsModelsAndCallers(t *testing.T) {
 	if apitest.Reason(err) != "INVALID_TOKEN" {
 		t.Fatalf("malformed authorization: %v", err)
 	}
-	// GetAnalytics is FIN-5.
+	// GetAnalytics reads the persisted screen through the same mixed-model access policy.
 	_, err = c.analytics.GetAnalytics(apitest.User(ctx, alice), &analyticsv1.GetAnalyticsRequest{})
-	if status.Code(err) != codes.Unimplemented {
+	if err != nil {
 		t.Fatalf("GetAnalytics: %v", err)
 	}
 }

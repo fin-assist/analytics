@@ -1,6 +1,6 @@
 # Проверки и покрытие (FIN-238 / FIN-257 / FIN-330)
 
-analytics использует выпущенные `go-grpc v0.2.0`, `go-migrate v0.1.1`, `go-worker v0.1.0`, `go-postgres v0.3.0`, `go-identity v0.2.0` и `go-tombstone v0.1.0`. FIN-330 реализует `UpsertUserMetrics`, `ListPeriods`, `PurgeUserData`, production identity и tombstones; `GetAnalytics` — FIN-5.
+analytics использует выпущенные `go-grpc v0.2.0`, `go-migrate v0.1.1`, `go-worker v0.1.0`, `go-postgres v0.3.0`, `go-identity v0.2.0` и `go-tombstone v0.1.0`. FIN-330 реализует `UpsertUserMetrics`, `ListPeriods`, `PurgeUserData`, production identity и tombstones; `GetAnalytics` реализован в FIN-5.
 
 | Набор | Выбор Go | Что проверяется |
 |---|---|---|
@@ -8,7 +8,7 @@ analytics использует выпущенные `go-grpc v0.2.0`, `go-migrat
 | Integration | `^(Test\|Fuzz)Integration` | PostgreSQL 18: схема, версии по ключу, правило удаления по бо́льшей версии двух режимов и растущей метки, round trip снимка, конкурентная доставка, планы запросов по первичным ключам; репозиторий только в транзакции; сценарий с реальным `go-tombstone`: удаление и запись сериализуются guard (оба порядка), конкурентные пакеты одного пользователя; identity prod (TLS JWKS, CA, API-токен, gRPC `GetSigningKeys` на bufconn) и stage (файлы ключей), ошибки конфигурации; up/down/up миграций, CLI `migrate` с источником `tombstone` |
 | API | `^(Test\|Fuzz)API` | Полная сборка (`apitest`): `UpsertUserMetrics` — применение, повтор той же версии, старая версия (`skipped_stale_periods`), удаление, каждая ошибка правил записи, чужие вызывающие; `ListPeriods` — пользователь, свой/чужой `user_id`, системный вызов `assistant` с `user_id` и без, пустой список, неизвестный тип, чужие вызывающие, `bank-bff` без токена и с неверным `authorization`; `PurgeUserData` — только `user`, повтор, данные другого пользователя целы, опоздавший пакет без эффекта, `TOKEN_REVOKED`; CLI `serve` с `verify` в prod и stage на настоящих TCP/HTTPS (токены, маскирование debug-лога, отказ неполной настройки); operational API |
 
-Тесты схемы вызывают PostgreSQL напрямую и остаются integration. Предложенное чтение `GetAnalytics` (FIN-5) пока живёт в `internal/adapter/postgres/metrics_read_test.go`: round trip «запись production-репозиторием → чтение» проверяет и запись, и будущий запрос.
+Тесты схемы вызывают PostgreSQL напрямую и остаются integration. Production-чтение `GetAnalytics` живёт в `internal/adapter/postgres/analytics.go`; прежние round trip-тесты используют именно его SQL и сканирование.
 
 ## PostgreSQL и общий знаменатель
 
@@ -40,4 +40,4 @@ analytics использует выпущенные `go-grpc v0.2.0`, `go-migrat
 
 1015 statements во всех трёх профилях. Это замер после актуализации на FIN-240 и классификации с `-race -count=1 -timeout=8m -coverpkg=./...`, а не подтверждение завершения FIN-238. Старые метрики строк сюда не переносились. Целевой 80% применяется к каждому набору; код и тестовая инфраструктура из знаменателя не исключались. Недостаток покрытия не скрывается и не заполняется искусственными тестами ради процентов.
 
-`GetAnalytics` (FIN-5) остаётся отдельной задачей; процент покрытия не подтверждает его сценарии.
+FIN-5 добавляет синтетический typed-snapshot fixture `testdata/analytics.json`. Матрица `TestIntegrationGetAnalyticsSnapshotTransport` проходит через реальный bufconn transport/usecase/PostgreSQL; `TestAPIGetAnalyticsScreenContract` — через полную production-сборку с identity/access/tombstones. Проверяются оба режима и готовые actions/selection, все MVP-примитивы/состояния, supports/exp, точный период и навигация, ранний месяц, stale и окна блокировок, старые версии определений, отрицательные суммы/доли, безопасный числовой диапазон, частичный отказ JSON и пустые данные. Unit отдельно проверяет часы/DST/границы, обработчики, отображение строк, таймаут блока, полный отказ и registry-конфликты. Процент покрытия не заменяет эти сценарии. Производитель расчётов и реальная цепочка импорта проверяются отдельно в FIN-355/357/362.

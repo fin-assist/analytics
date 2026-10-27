@@ -1,0 +1,825 @@
+{
+  "user_id": "01a107db-ae80-7b07-b8a1-00000000a11c",
+  "calc_version": 1,
+  "state": {
+    "has_data": true,
+    "data_from": "2026-06-01T00:00:00+03:00",
+    "data_to": "2026-09-26T00:00:00+03:00",
+    "last_operation_at": "2026-09-25T21:40:00+03:00",
+    "stale_after": "2026-10-10T00:00:00+03:00",
+    "full_months": 3,
+    "recalculating": false,
+    "time_zone": "Europe/Moscow",
+    "calculated_at": "2026-09-26T00:00:00+03:00"
+  },
+  "periods": [
+    {
+      "period": 1,
+      "period_key": "2026-09",
+      "transfer_mode": 1,
+      "range": {
+        "start": "2026-09-01T00:00:00+03:00",
+        "end": "2026-10-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": 2,
+        "data_from": "2026-09-01T00:00:00+03:00",
+        "data_to": "2026-09-25T21:40:00+03:00",
+        "gaps": []
+      },
+      "unread_lines_count": 5,
+      "calculated_at": "2026-09-25T22:00:00+03:00",
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "8432000",
+            "filters": {
+              "from": "2026-09-01T00:00:00+03:00",
+              "to": "2026-10-01T00:00:00+03:00",
+              "kind": 1,
+              "transfer_mode": 1
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "7000000",
+            "range": {
+              "start": "2026-08-01T00:00:00+03:00",
+              "end": "2026-08-26T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.typical",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "8890000",
+            "basis": {
+              "range": {
+                "start": "2026-06-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 3
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "15690000",
+            "filters": {
+              "from": "2026-09-01T00:00:00+03:00",
+              "to": "2026-10-01T00:00:00+03:00",
+              "kind": 2,
+              "transfer_mode": 1
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "7258000",
+            "balance": {
+              "share_of_income": 0.4625876354
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "337280"
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "289000",
+            "range": {
+              "start": "2026-08-01T00:00:00+03:00",
+              "end": "2026-09-01T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "10120000"
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_supermarkets",
+                  "category_name": "Супермаркеты",
+                  "category_icon": "cart",
+                  "amount_minor": "8432000",
+                  "share": 1,
+                  "operation_count": "28",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "category_id": "cat_supermarkets"
+                  }
+                },
+                {
+                  "category_id": "cat_refund",
+                  "category_name": "Возвраты",
+                  "category_icon": "return",
+                  "amount_minor": "-12345",
+                  "operation_count": "1",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "category_id": "cat_refund"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_salary",
+                  "category_name": "Зарплата",
+                  "category_icon": "wallet",
+                  "note": "зарплата и проценты",
+                  "amount_minor": "15690000",
+                  "share": 1,
+                  "operation_count": "1",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 2,
+                    "transfer_mode": 1,
+                    "category_id": "cat_salary"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "expense_minor": "7000000",
+                  "income_minor": "10000000",
+                  "bounds": {
+                    "coverage": 1,
+                    "data_from": "2026-08-01T00:00:00+03:00",
+                    "data_to": "2026-08-31T23:59:59+03:00"
+                  }
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "expense_minor": "8432000",
+                  "income_minor": "15690000",
+                  "bounds": {
+                    "coverage": 2,
+                    "data_from": "2026-09-01T00:00:00+03:00",
+                    "data_to": "2026-09-25T21:40:00+03:00"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "insights.regular_payments",
+          "definition_version": 1,
+          "metric": {
+            "status": 2,
+            "value_minor": "150000",
+            "basis": {
+              "range": {
+                "start": "2026-06-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 3
+            },
+            "regular_payments": {
+              "count": 5,
+              "items": [
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000001",
+                  "title": "Спортзал",
+                  "amount_minor": "10000",
+                  "monthly_amount_minor": "10000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "selection": "s_regular_0",
+                    "selection_name": "Спортзал"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000002",
+                  "title": "Связь",
+                  "amount_minor": "20000",
+                  "monthly_amount_minor": "20000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "selection": "s_regular_1",
+                    "selection_name": "Связь"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000003",
+                  "title": "Музыка",
+                  "amount_minor": "30000",
+                  "monthly_amount_minor": "30000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "selection": "s_regular_2",
+                    "selection_name": "Музыка"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000004",
+                  "title": "Кино",
+                  "amount_minor": "40000",
+                  "monthly_amount_minor": "40000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "selection": "s_regular_3",
+                    "selection_name": "Кино"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000005",
+                  "title": "Книги",
+                  "amount_minor": "50000",
+                  "monthly_amount_minor": "50000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "selection": "s_regular_4",
+                    "selection_name": "Книги"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "insights.notable_spending",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "basis": {
+              "range": {
+                "start": "2026-06-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 3
+            },
+            "notable_spending": {
+              "items": [
+                {
+                  "category_id": "cat_supermarkets",
+                  "category_name": "Супермаркеты",
+                  "category_icon": "cart",
+                  "amount_minor": "8432000",
+                  "typical_amount_minor": "3100000",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "category_id": "cat_supermarkets"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "insights.bank_fees",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "124000",
+            "filters": {
+              "from": "2026-09-01T00:00:00+03:00",
+              "to": "2026-10-01T00:00:00+03:00",
+              "kind": 1,
+              "transfer_mode": 1,
+              "selection": "s_bank_fees",
+              "selection_name": "Комиссии и проценты банку"
+            },
+            "bank_fees": {
+              "kinds_name": "обслуживание, переводы, снятие наличных"
+            }
+          }
+        },
+        {
+          "metric_id": "insights.small_frequent",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "230000",
+            "basis": {
+              "range": {
+                "start": "2026-08-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 1
+            },
+            "small_frequent": {
+              "items": [
+                {
+                  "title": "Кофе и перекусы",
+                  "count": 23,
+                  "average_amount_minor": "10000",
+                  "monthly_amount_minor": "230000",
+                  "yearly_amount_minor": "2760000",
+                  "filters": {
+                    "from": "2026-08-01T00:00:00+03:00",
+                    "to": "2026-09-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "selection": "s_small_coffee",
+                    "selection_name": "Кофе и перекусы"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "period": 1,
+      "period_key": "2026-09",
+      "transfer_mode": 2,
+      "range": {
+        "start": "2026-09-01T00:00:00+03:00",
+        "end": "2026-10-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": 2,
+        "data_from": "2026-09-01T00:00:00+03:00",
+        "data_to": "2026-09-25T21:40:00+03:00",
+        "gaps": []
+      },
+      "unread_lines_count": 5,
+      "calculated_at": "2026-09-25T22:00:00+03:00",
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "8000000",
+            "filters": {
+              "from": "2026-09-01T00:00:00+03:00",
+              "to": "2026-10-01T00:00:00+03:00",
+              "kind": 1,
+              "transfer_mode": 2
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "7000000",
+            "range": {
+              "start": "2026-08-01T00:00:00+03:00",
+              "end": "2026-08-26T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.typical",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "8890000",
+            "basis": {
+              "range": {
+                "start": "2026-06-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 3
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "15690000",
+            "filters": {
+              "from": "2026-09-01T00:00:00+03:00",
+              "to": "2026-10-01T00:00:00+03:00",
+              "kind": 2,
+              "transfer_mode": 2
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "7258000",
+            "balance": {
+              "share_of_income": 0.4625876354
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "337280"
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "289000",
+            "range": {
+              "start": "2026-08-01T00:00:00+03:00",
+              "end": "2026-09-01T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "10120000"
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_supermarkets",
+                  "category_name": "Супермаркеты",
+                  "category_icon": "cart",
+                  "amount_minor": "8432000",
+                  "share": 1,
+                  "operation_count": "28",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "category_id": "cat_supermarkets"
+                  }
+                },
+                {
+                  "category_id": "cat_refund",
+                  "category_name": "Возвраты",
+                  "category_icon": "return",
+                  "amount_minor": "-12345",
+                  "operation_count": "1",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "category_id": "cat_refund"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_salary",
+                  "category_name": "Зарплата",
+                  "category_icon": "wallet",
+                  "note": "зарплата и проценты",
+                  "amount_minor": "15690000",
+                  "share": 1,
+                  "operation_count": "1",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 2,
+                    "transfer_mode": 2,
+                    "category_id": "cat_salary"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "expense_minor": "7000000",
+                  "income_minor": "10000000",
+                  "bounds": {
+                    "coverage": 1,
+                    "data_from": "2026-08-01T00:00:00+03:00",
+                    "data_to": "2026-08-31T23:59:59+03:00"
+                  }
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "expense_minor": "8432000",
+                  "income_minor": "15690000",
+                  "bounds": {
+                    "coverage": 2,
+                    "data_from": "2026-09-01T00:00:00+03:00",
+                    "data_to": "2026-09-25T21:40:00+03:00"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "insights.regular_payments",
+          "definition_version": 1,
+          "metric": {
+            "status": 2,
+            "value_minor": "150000",
+            "basis": {
+              "range": {
+                "start": "2026-06-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 3
+            },
+            "regular_payments": {
+              "count": 5,
+              "items": [
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000001",
+                  "title": "Спортзал",
+                  "amount_minor": "10000",
+                  "monthly_amount_minor": "10000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "selection": "s_regular_0",
+                    "selection_name": "Спортзал"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000002",
+                  "title": "Связь",
+                  "amount_minor": "20000",
+                  "monthly_amount_minor": "20000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "selection": "s_regular_1",
+                    "selection_name": "Связь"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000003",
+                  "title": "Музыка",
+                  "amount_minor": "30000",
+                  "monthly_amount_minor": "30000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "selection": "s_regular_2",
+                    "selection_name": "Музыка"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000004",
+                  "title": "Кино",
+                  "amount_minor": "40000",
+                  "monthly_amount_minor": "40000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "selection": "s_regular_3",
+                    "selection_name": "Кино"
+                  }
+                },
+                {
+                  "id": "01a107db-ae80-7b07-b8a1-000000000005",
+                  "title": "Книги",
+                  "amount_minor": "50000",
+                  "monthly_amount_minor": "50000",
+                  "schedule_name": "15-го числа",
+                  "category_id": "cat_services",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "selection": "s_regular_4",
+                    "selection_name": "Книги"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "insights.notable_spending",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "basis": {
+              "range": {
+                "start": "2026-06-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 3
+            },
+            "notable_spending": {
+              "items": [
+                {
+                  "category_id": "cat_supermarkets",
+                  "category_name": "Супермаркеты",
+                  "category_icon": "cart",
+                  "amount_minor": "8432000",
+                  "typical_amount_minor": "3100000",
+                  "filters": {
+                    "from": "2026-09-01T00:00:00+03:00",
+                    "to": "2026-10-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "category_id": "cat_supermarkets"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "insights.bank_fees",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "124000",
+            "filters": {
+              "from": "2026-09-01T00:00:00+03:00",
+              "to": "2026-10-01T00:00:00+03:00",
+              "kind": 1,
+              "transfer_mode": 2,
+              "selection": "s_bank_fees",
+              "selection_name": "Комиссии и проценты банку"
+            },
+            "bank_fees": {
+              "kinds_name": "обслуживание, переводы, снятие наличных"
+            }
+          }
+        },
+        {
+          "metric_id": "insights.small_frequent",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "230000",
+            "basis": {
+              "range": {
+                "start": "2026-08-01T00:00:00+03:00",
+                "end": "2026-09-01T00:00:00+03:00"
+              },
+              "full_months": 1
+            },
+            "small_frequent": {
+              "items": [
+                {
+                  "title": "Кофе и перекусы",
+                  "count": 23,
+                  "average_amount_minor": "10000",
+                  "monthly_amount_minor": "230000",
+                  "yearly_amount_minor": "2760000",
+                  "filters": {
+                    "from": "2026-08-01T00:00:00+03:00",
+                    "to": "2026-09-01T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "selection": "s_small_coffee",
+                    "selection_name": "Кофе и перекусы"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -49,11 +49,11 @@ updates them in the same PR. A service made from the template rewrites the first
 | Validated batch of UpsertUserMetrics: domain types and every rule of «Инварианты в коде сервиса» | `internal/domain/metrics.go` |
 | Identity assembly (go-identity `NewAssembly`) and tombstone admission | `internal/app/identity.go`, `internal/app/app.go`; settings — `internal/config/identity.go` |
 | gRPC server, interceptors, access table types, identity and tombstone interfaces | `github.com/fin-assist/go-grpc/server`; rules — `docs/server.md` |
-| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/`; UpsertUserMetrics/ListPeriods — `internal/adapter/grpc/metrics/` (proto ↔ domain conversion) |
+| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/`; UpsertUserMetrics/ListPeriods/GetAnalytics — `internal/adapter/grpc/metrics/` (proto ↔ domain conversion); screen selection — `internal/metrics/analytics.go`; presentation and per-block deadlines — `composer.go`, `charts.go`, `insights.go`, `presentation.go` |
 | Pools, transaction manager, repositories | `internal/adapter/postgres/`; rules — `docs/migrations.md`, «Запросы на pgx» |
 | Migration runner and the PostgreSQL for tests | `github.com/fin-assist/go-migrate`, its public `migratetest`, `internal/testdb/` |
 | SQL migrations (embedded) | `migrations/`; rules — `docs/migrations.md` |
-| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the write, ListPeriods and purge SQL and the snapshot → rows mapping — `internal/adapter/postgres/metrics.go`; the GetAnalytics read proposed for FIN-5 — `internal/adapter/postgres/metrics_read_test.go`; tests on PostgreSQL — `metrics_schema_test.go`, unit tests of the mapping — `metrics_mapping_unit_test.go` (same package) |
+| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the write, ListPeriods and purge SQL and the snapshot → rows mapping — `internal/adapter/postgres/metrics.go`; the single-statement GetAnalytics read and domain row mapping — `internal/adapter/postgres/analytics.go`; tests on PostgreSQL — `metrics_schema_test.go`, unit tests of the mapping — `metrics_mapping_unit_test.go` and `analytics_unit_test.go` (same package) |
 | Clients of other services, service token source | `github.com/fin-assist/go-grpc/client`; future peer-specific adapters in `internal/adapter/client/` |
 | Background jobs | `github.com/fin-assist/go-worker`; future jobs in `internal/worker/` |
 | Configuration: every variable with its default and description | `internal/config/vars.go` (`Vars`); generated tables — `docs/config.md` |
