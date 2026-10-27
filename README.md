@@ -2,7 +2,7 @@
 
 Выпуск версии сервиса и повторная публикация GitHub Release описаны в [docs/releasing.md](docs/releasing.md). История изменений — [CHANGELOG.md](CHANGELOG.md). История начинается с пустого `Unreleased`; версии и теги создаёт владелец после PR и post-merge CI. Публикация образа и deployment — отдельные этапы.
 
-Сервис `analytics` «Понятные финансы»: хранит готовые персональные метрики, которые присылает `bank-statement-data` (`MetricsIngestService.UpsertUserMetrics`), и собирает из них экран «Аналитика» (`AnalyticsService.GetAnalytics`, `ListPeriods`; REST 6.1, 6.2). Сам метрики не считает. Контракт — [`fin-assist/contracts`](https://github.com/fin-assist/contracts): `docs/grpc-api.md` (7.3), `proto/finassist/analytics/v1/analytics.proto`, `docs/api.md` (6.1, 6.2, «Блоки»); модуль `github.com/fin-assist/contracts/gen/go`.
+Сервис `analytics` «Понятные финансы»: хранит готовые персональные метрики, которые присылает `bank-statement-data` (`MetricsIngestService.UpsertUserMetrics`), и собирает из них экран «Аналитика» (`AnalyticsService.GetAnalytics`, `ListPeriods`; REST 6.1, 6.2). Операции повторно не агрегирует: суммы, базы и пороги приходят готовыми; производные для представления по calc.md 1/5/10 описаны в [docs/server.md](docs/server.md#производные-для-представления). Контракт — [`fin-assist/contracts`](https://github.com/fin-assist/contracts): `docs/grpc-api.md` (7.3), `proto/finassist/analytics/v1/analytics.proto`, `docs/api.md` (6.1, 6.2, «Блоки»); модуль `github.com/fin-assist/contracts/gen/go`.
 
 Создан из шаблона [`fin-assist/go-service-template`](https://github.com/fin-assist/go-service-template) ([FIN-117](https://finassist.youtrack.cloud/issue/FIN-117), перенос — [FIN-192](https://finassist.youtrack.cloud/issue/FIN-192)).
 
@@ -19,7 +19,7 @@
 ## Что реализовано и что нет
 
 - **FIN-330** ([FIN-282](https://finassist.youtrack.cloud/issue/FIN-282), [FIN-283](https://finassist.youtrack.cloud/issue/FIN-283), [FIN-290](https://finassist.youtrack.cloud/issue/FIN-290)): `AUTH_MODE=verify` через `go-identity v0.2.0` `NewAssembly` (prod — Kubernetes ServiceAccount, stage — файлы ключей, переменные `AUTH_*` как в assistant), `go-tombstone v0.1.0` вместо `NoTombstones` (admission `TOKEN_REVOKED`, `Guard` в записи, источник миграций перед сервисным); `MetricsIngestService.UpsertUserMetrics`, `AnalyticsService.ListPeriods` и `UserDeletionService.PurgeUserData` по схеме FIN-113 и правилам записи contracts#60 ([docs/schema.md](docs/schema.md)); `make test-names` классифицирует fuzz-цели и отклоняет `Example…`.
-- **Не реализовано**: сборка экрана `GetAnalytics` — [FIN-5](https://finassist.youtrack.cloud/issue/FIN-5) (метод зарегистрирован и отвечает `UNIMPLEMENTED`; предложенное чтение 6.1 лежит в `internal/adapter/postgres/metrics_read_test.go`).
+- **FIN-5**: `GetAnalytics` читает состояние, точный/последний период, оба режима переводов и навигацию одним SQL-снимком; собирает все MVP-блоки, тексты, `supports` и `analytics_order:b`. Формул финансовых метрик здесь нет. Старые `definition_version` не блокируют значения: до атомарной замены используется сохранённый снимок. Ошибка одного блока даёт `unavailable`; отсутствие снимка явного периода — `coverage=no_data`, отсутствие операций у пользователя — только `has_data=false`. При пересчёте старого снимка без исходного IANA-пояса неподтверждённые дневные подписи заменяются периодом из ключа и явным partial/recalculating; финансовые границы и фильтры сохраняются. Лимит сборки каждого блока и метрики доли отказов — [docs/server.md](docs/server.md).
 - Секрет `CLAUDE_CODE_OAUTH_TOKEN`, Claude GitHub App и Codex на репозитории — настраивает владелец.
 
 ## Раскладка
@@ -29,8 +29,8 @@ cmd/analytics/                     main: serve and migrate commands, listeners, 
 internal/app/                      assembly: identity, pools, server, wire() (handlers, clients, jobs), access table, migration sources
 internal/app/apitest/              the whole service in-process for API tests
 internal/domain/                   entities and invariants, no infrastructure imports
-internal/metrics/                  usecases of the stored metrics; interfaces of the repository, guard and observer
-internal/adapter/grpc/metrics/     gRPC handlers: messages <-> domain, UpsertUserMetrics and ListPeriods
+internal/metrics/                  persistence usecases and screen selection/current-time flags; consumer interfaces
+internal/adapter/grpc/metrics/     gRPC handlers and presentation: typed snapshots -> blocks and server texts
 internal/adapter/postgres/         pools, go-postgres adapter, the metrics repository on pgx
 internal/testdb/                   test server selection; public go-migrate harness owns isolated databases
 internal/config/                   configuration from the environment

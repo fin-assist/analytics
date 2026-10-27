@@ -2,7 +2,9 @@
 
 The Go service `analytics` of «Понятные финансы» (B2C personal finance: OFX statement import from T-Bank, operations,
 analytics, LLM assistant): it stores the ready personal metrics `bank-statement-data` sends and builds the Analytics
-screen from them; it calculates nothing itself (`docs/grpc-api.md` 7.3 in `fin-assist/contracts`). Made from
+screen from them. It does not reaggregate operations or choose financial bases/thresholds: only the display
+quantities of `docs/calc.md` 1/5/10 and `docs/api.md` 6.1 are derived from persisted aggregates
+(monthly balance shares, textual comparisons/ratios, the collapsed payment remainder). Made from
 `fin-assist/go-service-template`. Read by Claude Code (through `CLAUDE.md`) and by Codex. This file is the orientation
 map: read it and `README.md` first, then open only what the task touches.
 
@@ -53,11 +55,11 @@ updates them in the same PR. A service made from the template rewrites the first
 | Validated batch of UpsertUserMetrics: domain types and every rule of «Инварианты в коде сервиса» | `internal/domain/metrics.go` |
 | Identity assembly (go-identity `NewAssembly`) and tombstone admission | `internal/app/identity.go`, `internal/app/app.go`; settings — `internal/config/identity.go` |
 | gRPC server, interceptors, access table types, identity and tombstone interfaces | `github.com/fin-assist/go-grpc/server`; rules — `docs/server.md` |
-| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/`; UpsertUserMetrics/ListPeriods — `internal/adapter/grpc/metrics/` (proto ↔ domain conversion) |
+| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/`; UpsertUserMetrics/ListPeriods/GetAnalytics — `internal/adapter/grpc/metrics/` (proto ↔ domain conversion); screen selection — `internal/metrics/analytics.go`; presentation and per-block deadlines — `composer.go`, `charts.go`, `insights.go`, `presentation.go`, `calendar_labels.go` |
 | Pools, transaction manager, repositories | `internal/adapter/postgres/`; rules — `docs/migrations.md`, «Запросы на pgx» |
 | Migration runner and the PostgreSQL for tests | `github.com/fin-assist/go-migrate`, its public `migratetest`, `internal/testdb/` |
 | SQL migrations (embedded) | `migrations/`; rules — `docs/migrations.md` |
-| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the write, ListPeriods and purge SQL and the snapshot → rows mapping — `internal/adapter/postgres/metrics.go`; the GetAnalytics read proposed for FIN-5 — `internal/adapter/postgres/metrics_read_test.go`; tests on PostgreSQL — `metrics_schema_test.go`, unit tests of the mapping — `metrics_mapping_unit_test.go` (same package) |
+| Database schema: tables, invariants, the versioned upsert of `UpsertUserMetrics`, the read queries | `docs/schema.md`; the write, ListPeriods and purge SQL and the snapshot → rows mapping — `internal/adapter/postgres/metrics.go`; the single-statement GetAnalytics read and domain row mapping — `internal/adapter/postgres/analytics.go`; tests on PostgreSQL — `metrics_schema_test.go`, unit tests of the mapping — `metrics_mapping_unit_test.go` and `analytics_unit_test.go` (same package) |
 | Clients of other services, service token source | `github.com/fin-assist/go-grpc/client`; future peer-specific adapters in `internal/adapter/client/` |
 | Background jobs | `github.com/fin-assist/go-worker`; future jobs in `internal/worker/` |
 | Configuration: every variable with its default and description | `internal/config/vars.go` (`Vars`); generated tables — `docs/config.md` |
@@ -424,4 +426,4 @@ The service keeps CLI/listener ownership, configuration, access policy, migratio
   READ COMMITTED transaction: guard → state → headers/markers (removal compared with the greater version of both
   modes; relies on the guard's per-user serialization) → children of the applied keys. ListPeriods takes the user
   from the verified sub (a different request user_id is refused) or from user_id of the assistant system call.
-  GetAnalytics is FIN-5 and answers UNIMPLEMENTED. A schema or query change updates `docs/schema.md` and its tests.
+  GetAnalytics is FIN-5: during rebuilding, source IANA is unknown and unverified day captions are suppressed; period keys and stored financial ranges/filters are preserved (docs/server.md). A schema or query change updates `docs/schema.md` and its tests.

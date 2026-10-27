@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	userdeletionv1 "github.com/fin-assist/contracts/gen/go/finassist/userdeletion/v1"
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,7 +55,15 @@ func wire(a *App) (jobs []worker.Job, closeAll func(), err error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	metricsgrpc.Register(a.GRPC.GRPC(), uc, a.Log)
+	screen, err := metrics.NewScreen(repo, func() time.Time { return a.Now() })
+	if err != nil {
+		return nil, nil, err
+	}
+	composer, err := metricsgrpc.NewComposer(a.Registry)
+	if err != nil {
+		return nil, nil, err
+	}
+	metricsgrpc.Register(a.GRPC.GRPC(), uc, screen, composer, a.Log)
 	deletions, err := tombstone.NewDeletionServer(transactor{a.DB}, a.Tombstones, repo.Purge)
 	if err != nil {
 		return nil, nil, err

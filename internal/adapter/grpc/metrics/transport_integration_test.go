@@ -28,6 +28,7 @@ import (
 	"github.com/fin-assist/go-grpc/server"
 	"github.com/fin-assist/go-migrate"
 	tombstone "github.com/fin-assist/go-tombstone"
+	"github.com/prometheus/client_golang/prometheus"
 
 	metricsgrpc "github.com/fin-assist/analytics/internal/adapter/grpc/metrics"
 	"github.com/fin-assist/analytics/internal/adapter/postgres"
@@ -86,7 +87,15 @@ func startTransport(t *testing.T) transport {
 		t.Fatal(err)
 	}
 	s := grpc.NewServer(grpc.UnaryInterceptor(asUser))
-	metricsgrpc.Register(s, uc, slog.New(slog.DiscardHandler))
+	screen, err := metrics.NewScreen(postgres.NewMetrics(db), func() time.Time { return time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	composer, err := metricsgrpc.NewComposer(prometheus.NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricsgrpc.Register(s, uc, screen, composer, slog.New(slog.DiscardHandler))
 	lis := bufconn.Listen(1 << 20)
 	go func() { _ = s.Serve(lis) }()
 	t.Cleanup(s.Stop)

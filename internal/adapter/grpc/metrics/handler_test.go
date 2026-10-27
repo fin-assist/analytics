@@ -282,7 +282,7 @@ func TestUnitListPeriods(t *testing.T) {
 
 func TestUnitRegister(t *testing.T) {
 	s := grpc.NewServer()
-	Register(s, &fakeUsecase{}, slog.New(slog.DiscardHandler))
+	Register(s, &fakeUsecase{}, nil, nil, slog.New(slog.DiscardHandler))
 	info := s.GetServiceInfo()
 	if _, ok := info["finassist.analytics.v1.MetricsIngestService"]; !ok {
 		t.Fatal("MetricsIngestService not registered")
@@ -290,8 +290,8 @@ func TestUnitRegister(t *testing.T) {
 	if _, ok := info["finassist.analytics.v1.AnalyticsService"]; !ok {
 		t.Fatal("AnalyticsService not registered")
 	}
-	// GetAnalytics is FIN-5.
-	if _, err := (&analytics{}).GetAnalytics(t.Context(), &analyticsv1.GetAnalyticsRequest{}); status.Code(err) != codes.Unimplemented {
+	// An absent subject is refused before reading the screen.
+	if _, err := (&analytics{}).GetAnalytics(t.Context(), &analyticsv1.GetAnalyticsRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("GetAnalytics: %v", err)
 	}
 }
