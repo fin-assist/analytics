@@ -277,14 +277,15 @@ func TestIntegrationDomainRevisionReadsStayCoherentDuringConcurrentCommits(t *te
 	}()
 	key := "2026-09"
 	observedVersions := map[int32]bool{}
-	readVersion := func(want int32) {
+	readVersion := func(before, after int32) {
 		t.Helper()
 		data, err := e.repo.ReadAnalytics(ctx, user, domain.PeriodMonth, &key, domain.TransferWith)
 		if err != nil || data.State == nil || data.Snapshot == nil {
 			t.Fatal(data, err)
 		}
-		if data.State.FullMonths != want || data.Snapshot.UnreadLines != want || data.State.Revisions["uploads"] != int64(want) || data.Snapshot.Revisions["uploads"] != int64(want) {
-			t.Fatal("mixed or wrong committed financial/provenance version", want, data)
+		actual := data.State.FullMonths
+		if (actual != before && actual != after) || data.Snapshot.UnreadLines != actual || data.State.Revisions["uploads"] != int64(actual) || data.Snapshot.Revisions["uploads"] != int64(actual) {
+			t.Fatal("mixed or wrong committed financial/provenance version", before, after, data)
 		}
 		observedVersions[data.State.FullMonths] = true
 	}
@@ -300,19 +301,27 @@ func TestIntegrationDomainRevisionReadsStayCoherentDuringConcurrentCommits(t *te
 		if step.version != version {
 			t.Fatal("unexpected staged version", step.version, version)
 		}
-		readVersion(version - 1)
+		readVersion(version-1, version-1)
 		close(step.allowCommit)
-		select {
-		case got := <-committed:
-			if got != version {
-				t.Fatal("unexpected committed version", got, version)
+		// Race real reads with COMMIT, and always attempt at least one before
+		// consuming completion. Each statement may see the old or new version,
+		// but never a mixed state/header/source pair across those versions.
+		for pending := true; pending; {
+			readVersion(version-1, version)
+			select {
+			case got := <-committed:
+				if got != version {
+					t.Fatal("unexpected committed version", got, version)
+				}
+				pending = false
+			case err := <-done:
+				t.Fatal("writer stopped before commit observation", err)
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			default:
 			}
-		case err := <-done:
-			t.Fatal("writer stopped before commit observation", err)
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
 		}
-		readVersion(version)
+		readVersion(version, version)
 		select {
 		case err := <-done:
 			t.Fatal("writer finished before the reader acknowledged this version", err)
