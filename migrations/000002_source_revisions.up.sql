@@ -1,6 +1,6 @@
 ALTER TABLE user_data_state ADD COLUMN data_revisions jsonb;
 COMMENT ON COLUMN user_data_state.data_revisions IS
- 'Известные ревизии исходных данных по открытым кодам. NULL или пустой объект означают неизвестную историю; значения относятся к этому состоянию.';
+ 'Объект calc_version и revisions с открытыми кодами и точными int64. Подтверждение известно только при совпадении версии строки и отсутствии более новых заголовков/удалений пользователя; после записи старым образом автоматически неизвестен. NULL означает неизвестную историю.';
 ALTER TABLE period_snapshot ADD COLUMN data_revisions jsonb;
 COMMENT ON COLUMN period_snapshot.data_revisions IS
- 'Ревизии именно этого снимка периода и режима, часть payload calc_version. Не заменяются более новым состоянием пользователя; у прежних снимков остаются неизвестными.';
+ 'Объект calc_version и revisions именно этого снимка периода и режима. Несовпадение stamp с версией финансовой строки после rollback/rollforward означает unknown; у прежних снимков NULL, подстановка из состояния запрещена.';

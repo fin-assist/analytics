@@ -234,17 +234,28 @@ FIN-5: default-чтение с `$3=NULL` проверяется тем же prod
 ## Ревизии исходных данных (FIN-369)
 
 Миграция `000002_source_revisions` добавляет nullable `data_revisions jsonb` в `user_data_state`
-и `period_snapshot`. Это объект открытых кодов → точных int64; NULL, JSON null и пустой объект
+и `period_snapshot`. Приватный формат — `{"calc_version":N,"revisions":{"uploads":2,...}}`:
+версия строки и объект открытых кодов → точных int64. SQL NULL, JSON null целиком и пустой объект
 означают неизвестную provenance. Миграция не заполняет старые строки по нынешнему состоянию,
 времени или calc_version. JSONB сохраняет валидные неизвестные коды; значения ≥2^53 не проходят
 через float. Старые финансовые колонки и ключи остаются прежними. Down удаляет только новую
 metadata; при возврате к новому consumer старые снимки остаются unknown до новой публикации.
 
 `UpsertState` и пакетный `UpsertPeriods` записывают metadata теми же параметризованными SQL и
-в той же транзакции, что соответствующий финансовый payload. Нижняя calc_version не меняет
+в той же транзакции, что соответствующий финансовый payload. Envelope создаётся непосредственно
+в write SQL с той же `$2::integer`, что записывается в `calc_version`; отдельного version-аргумента
+для metadata нет. Нижняя calc_version не меняет
 ни факты, ни provenance; повтор той же версии применяет тот же неизменяемый payload.
 Как в FIN-283, неизменность содержимого одной версии обеспечивает производитель: analytics
 не вводит отдельный hash или новую проверку совпадения payload при равной версии.
+
+При чтении stamp envelope должен совпадать с `calc_version` финансовой строки. После rollback
+старый образ может обновить факты/версию, не затронув новую JSONB-колонку; при rollforward такая
+metadata автоматически становится unknown до новой публикации. Ручной SQL перед откатом не нужен.
+Дополнительно state proof неизвестен, если у пользователя есть любой заголовок или removal marker
+с версией новее состояния, независимо от типа периода и режима. Это защищает missing/no-data/empty
+ответы от header-only записи старого образа. Проверка выполняется один раз в materialized CTE
+того же read statement snapshot, а не повторно для каждого элемента списка.
 
 Наличие ревизий в `UserDataState` удостоверяет также полноту доставленного календаря. Перед частями
 каждого пересчёта producer отправляет clearing-состояние без ревизий и ждёт его ACK; состояния внутри
@@ -275,6 +286,7 @@ provenance, прежние финансовые поля остаются отс
 | Не более32 записей, уникальный code, ASCII `[a-z][a-z0-9_]{0,63}`, значение ≥0; unknown valid code сохраняется. Неверная metadata любого state/period отклоняет весь ingest bare INVALID_ARGUMENT до эффектов | `TestUnitRevisionMetadataIsOpenBoundedAndExact`, `TestUnitRevisionConversionPreservesOpenCodesWithoutLoss`, `TestAPISourceRevisionsRejectInvalidWholeBatch` и integration-эквивалент |
 | Метаданные принадлежат конкретному выбранному снимку/состоянию; lower-version/retry не искажают provenance; last delete/purge/late write не воскрешают данные | `TestAPISourceProvenanceBelongsToSelectedSnapshot` и integration-эквивалент |
 | Пустая/частичная/legacy metadata не получает ложную baseline; составные ответы возвращают per-code intersection с использованным состоянием, clearing ждёт final completion proof | `TestUnitResponseProvenanceIntersectsEveryUsedSource`, `TestUnitPeriodProvenanceIncludesUsedScreenState`, `TestAPIResponseProvenanceIncludesStateAndSnapshot`, `TestAPISourceProvenanceRequiresFinalCompletionProof` и integration-эквиваленты, `TestIntegrationProvenanceUpgradeDoesNotInventLegacyBaselines` |
+| Rollback старого образа не оставляет ложный proof после изменения state/header; более новый marker любого типа/режима делает state proof неизвестным | `TestUnitStoredProvenanceIsBoundToItsFinancialRowVersion`, `TestAPIRollbackWritesCannotCertifyOldSourceProvenance` и integration-эквивалент |
 | Хранимые invalid JSON/negative/overflowed revisions дают внутреннюю ошибку чтения, не пользовательскую validation и не тихое подтверждение свежести | `TestUnitRevisionJSONPreservesInt64AndRejectsCorruptStorage`, `TestUnitAnalyticsReadRejectsCorruptStoredProvenance`, `TestAPIStoredRevisionNullIsNotKnownZero` и integration-эквивалент |
 
 Порядок внедрения: опубликованный контрактный тег → этот analytics consumer и BFF с текстом
@@ -282,6 +294,7 @@ provenance, прежние финансовые поля остаются отс
 локальный Go replace не является выпуском/основанием сервисного PR; production зависимости
 закрепляются опубликованным тегом до PR. Фактическая выкладка и публикация тега — отдельно.
 
-Сохранённая metadata декодируется только из JSON object с целыми int64-значениями; null внутри
-object, дроби, bool и неверная форма приводят к INTERNAL на чтении, без ложного known-zero.
-SQL NULL/JSON null целиком и пустой object остаются неизвестной legacy provenance.
+Сохранённая metadata декодируется из version envelope: stamp — положительный int32, `revisions` —
+JSON object с целыми int64-значениями. При совпадающем stamp null внутри object, дроби, bool и неверная
+форма приводят к INTERNAL на чтении, без ложного known-zero. Невалидный stamp тоже отклоняется.
+Несовпадающий stamp, SQL NULL/JSON null целиком и пустой object не подтверждают provenance.

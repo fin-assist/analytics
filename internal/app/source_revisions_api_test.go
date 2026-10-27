@@ -245,7 +245,9 @@ func responseProvenanceScenario(t *testing.T) {
 				}
 			}
 			want := map[string]int64{"categories": 1, "future_source": math.MaxInt64}
-			if order == "legacy-state" {
+			// A newer period-only write also invalidates the state's inventory
+			// completion proof, even for counters equal in the two payloads.
+			if order != "period-then-state" {
 				want = map[string]int64{}
 			}
 			response, err := c.analytics.GetAnalytics(apitest.Caller(t.Context(), "assistant"), &pb.GetAnalyticsRequest{UserId: proto.String(alice), PeriodKey: proto.String("2026-09")})
@@ -276,7 +278,7 @@ func corruptRevisionScenario(t *testing.T) {
 		{"user_data_state", `UPDATE user_data_state SET data_revisions=$2 WHERE user_id=$1`},
 		{"period_snapshot", `UPDATE period_snapshot SET data_revisions=$2 WHERE user_id=$1`},
 	} {
-		for _, bad := range []string{`{"uploads":null}`, `{"uploads":true}`, `{"uploads":0.0}`, `[]`} {
+		for _, bad := range []string{`{"calc_version":1,"revisions":{"uploads":null}}`, `{"calc_version":1,"revisions":{"uploads":true}}`, `{"calc_version":1,"revisions":{"uploads":0.0}}`, `{"calc_version":1,"revisions":[]}`} {
 			if _, err := env.App.DB.Primary().Exec(t.Context(), storage.update, alice, bad); err != nil {
 				t.Fatal(err)
 			}
@@ -300,7 +302,7 @@ func corruptRevisionScenario(t *testing.T) {
 			}
 			revisionsWant(t, foreign.DataRevisions, known)
 		}
-		if _, err := env.App.DB.Primary().Exec(t.Context(), storage.update, alice, `{"categories":0,"uploads":0,"time_zone":0}`); err != nil {
+		if _, err := env.App.DB.Primary().Exec(t.Context(), storage.update, alice, `{"calc_version":1,"revisions":{"categories":0,"uploads":0,"time_zone":0}}`); err != nil {
 			t.Fatal(err)
 		}
 	}
