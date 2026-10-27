@@ -6,6 +6,10 @@
 - Запросы — ручной SQL на `pgx/v5`, без ORM и генерации кода.
 - Линтер миграций — [squawk](https://squawkhq.com) в CI.
 
+FIN-371: правила Squawk `prefer-bigint-over-int` и `prefer-bigint-over-smallint` выключены
+в `.squawk.toml`. Разрядность выбирается по предметному диапазону и ожидаемому росту таблицы.
+Существующие типы колонок и immutable-миграции не меняются; прежние inline ignore сохраняются.
+
 ## Файлы
 
 - `migrations/NNN_name.up.sql` и `migrations/NNN_name.down.sql`, номера с `000001`, имя — строчные латинские буквы, цифры и `_`.
