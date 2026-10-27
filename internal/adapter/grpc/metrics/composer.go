@@ -45,7 +45,6 @@ func NewComposer(reg prometheus.Registerer) (*Composer, error) {
 type composition struct {
 	s       domain.Analytics
 	zone    *time.Location
-	labels  *time.Location
 	metrics map[string]domain.Metric
 }
 
@@ -64,7 +63,7 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 	if err != nil {
 		return nil, err
 	}
-	p := composition{s: s, zone: zone, labels: snapshotLabelZone(s.Key.PeriodKey, &s.Range, zone), metrics: map[string]domain.Metric{}}
+	p := composition{s: s, zone: zone, metrics: map[string]domain.Metric{}}
 	if s.Snapshot != nil {
 		for _, m := range s.Snapshot.Metrics {
 			p.metrics[m.ID] = m
@@ -333,7 +332,9 @@ func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockL
 		out.Text = "Нужно больше полных месяцев"
 		if l.Required != nil {
 			out.Text = fmt.Sprintf("Нужно %d %s", l.GetRequired(), noun(int64(l.GetRequired()), "полный месяц", "полных месяца", "полных месяцев"))
-			if l.GetAvailable() == 0 {
+			if l.GetAvailable() == 0 && !p.preciseDays() {
+				out.Text += ", есть 0"
+			} else if l.GetAvailable() == 0 {
 				// Global coverage belongs to the current state, not the retained snapshot calendar.
 				from, to := p.s.State.DataFrom, p.s.State.DataTo
 				// Windowed observations may only describe the data before the selected boundary.
@@ -359,8 +360,8 @@ func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockL
 	case analyticsv1.LockReason_LOCK_REASON_TOO_EARLY_IN_MONTH:
 		out.Reason = "too_early_in_month"
 		out.Text = "Рано считать — мало дней"
-		if l.AvailableFrom != nil {
-			out.Text = "Посчитаем с " + day(calendarDay(l.AvailableFrom.AsTime(), p.calendar()))
+		if l.AvailableFrom != nil && p.preciseDays() {
+			out.Text = "Посчитаем с " + day(l.AvailableFrom.AsTime().In(p.zone))
 		}
 	case analyticsv1.LockReason_LOCK_REASON_STALE_DATA:
 		out.Reason = "stale_data"
@@ -370,12 +371,24 @@ func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockL
 }
 
 func (p composition) caption() string {
+	if !p.preciseDays() {
+		text := periodName(p.s.Key.PeriodKey)
+		if p.s.Snapshot != nil && p.s.Snapshot.Coverage == domain.CoveragePartial {
+			text += " · неполные данные"
+		}
+		if p.s.State != nil && p.s.State.Recalculating {
+			text += " · идёт пересчёт"
+		} else {
+			text += " · сохранённый расчёт"
+		}
+		return text
+	}
 	from, to := *p.s.Range.Start, p.s.Range.End.Add(-time.Nanosecond)
 	if p.s.Snapshot != nil {
 		from = *p.s.Snapshot.DataFrom
 		to = *p.s.Snapshot.DataTo
 	}
-	return dayRange(calendarDay(from, p.calendar()), to.In(p.calendar()))
+	return dayRange(from.In(p.zone), to.In(p.zone))
 }
 
 func (p composition) tile(id, label string, m *analyticsv1.Metric, caption string) map[string]any {
@@ -433,7 +446,7 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	if ready(cmp) && cmp.ValueMinor != nil {
 		dailyCaption = "раньше — " + money(cmp.GetValueMinor())
 		if cmp.GetRange().GetStart() != nil {
-			dailyCaption = "в " + monthPrep[calendarMonth(cmp.Range.Start, p.calendar()).Month()-1] + " — " + money(cmp.GetValueMinor())
+			dailyCaption = "в " + monthPrep[calendarMonth(cmp.Range.Start).Month()-1] + " — " + money(cmp.GetValueMinor())
 		}
 	}
 	tiles := []any{p.tile("balance", "Доходы минус расходы", bal, share), second, p.tile("daily_expense", "Расходы в день", daily, dailyCaption), p.tile("income", "Доходы", income, "")}

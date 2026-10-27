@@ -373,6 +373,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	if got.HasData || got.Params != nil || got.State != nil || len(got.Blocks) > 0 {
 		t.Fatalf("empty %+v", got)
 	}
+	retainedDSTScenarios(t, ingest, client, userCtx, producerCtx)
 }
 
 func assertRebuiltCalendar(t *testing.T, r *analyticsv1.GetAnalyticsResponse, source *analyticsv1.PeriodSnapshot) {
@@ -395,7 +396,7 @@ func assertRebuiltCalendar(t *testing.T, r *analyticsv1.GetAnalyticsResponse, so
 	if !strings.Contains(notes[1].(map[string]any)["text"].(string), "июнь — август") {
 		t.Fatal(notes)
 	}
-	if screenBlock(r, "expense_categories").Data.AsMap()["total"].(map[string]any)["label"] != "Всего · 1–25 сентября" {
+	if screenBlock(r, "expense_categories").Data.AsMap()["total"].(map[string]any)["label"] != "Всего · сентябрь 2026 · неполные данные · идёт пересчёт" {
 		t.Fatal("covered-day caption shifted")
 	}
 	if !proto.Equal(r.Period.Range, source.Range) || !proto.Equal(r.Period.Bounds.DataFrom, source.Bounds.DataFrom) || !proto.Equal(r.Period.Bounds.DataTo, source.Bounds.DataTo) {
@@ -403,7 +404,121 @@ func assertRebuiltCalendar(t *testing.T, r *analyticsv1.GetAnalyticsResponse, so
 	}
 	point := chart.Data.AsMap()["points"].([]any)[1].(map[string]any)
 	instant, e := time.Parse(time.RFC3339Nano, point["data_to"].(string))
-	if e != nil || !instant.Equal(source.Bounds.DataTo.AsTime()) || point["note"] != "по 25-е" {
+	if e != nil || !instant.Equal(source.Bounds.DataTo.AsTime()) || point["note"] != "неполные данные" {
 		t.Fatal("point instant/note changed", point, e)
+	}
+}
+
+// The producer's source IANA is absent from PeriodSnapshot. Round-trip actual
+// snapshots across DST boundaries without asserting an unrecoverable civil day.
+func retainedDSTScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient, client analyticsv1.AnalyticsServiceClient, userCtx, producerCtx context.Context) {
+	t.Helper()
+	for i, tc := range []struct {
+		key, month, start, end, to, label string
+		period                            commonv1.PeriodType
+	}{
+		{"2026-03", "2026-03", "2026-03-01T00:00:00+01:00", "2026-04-01T00:00:00+02:00", "2026-03-30T00:30:00+02:00", "март 2026", 1},
+		{"2026-10", "2026-10", "2026-10-01T00:00:00+02:00", "2026-11-01T00:00:00+01:00", "2026-10-28T23:59:59+01:00", "октябрь 2026", 1},
+		{"2026-10", "2026-10", "2026-10-01T00:00:00+02:00", "2026-11-01T00:00:00+01:00", "2026-10-31T23:59:59+01:00", "октябрь 2026", 1},
+		{"2026-Q4", "2026-12", "2026-10-01T00:00:00+02:00", "2027-01-01T00:00:00+01:00", "2026-12-31T23:59:59+01:00", "IV квартал 2026", 2},
+		{"2026", "2026-06", "2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z", "2026-06-30T00:30:00+01:00", "2026 год", 3},
+	} {
+		t.Run("retained-DST-"+tc.to, func(t *testing.T) {
+			parse := func(value string) *timestamppb.Timestamp {
+				at, e := time.Parse(time.RFC3339, value)
+				if e != nil {
+					t.Fatal(e)
+				}
+				return timestamppb.New(at)
+			}
+			req := analyticsFixture(t)
+			req.CalcVersion = int32(300 + i)
+			req.State.TimeZone = "UTC"
+			req.State.Recalculating = true
+			req.State.DataFrom = parse(tc.start)
+			req.State.DataTo = parse(tc.end)
+			req.State.LastOperationAt = parse(tc.to)
+			req.State.CalculatedAt = parse(tc.to)
+			req.State.StaleAfter = timestamppb.New(parse(tc.end).AsTime().AddDate(1, 0, 0))
+			for _, snap := range req.Periods {
+				snap.Period = tc.period
+				snap.PeriodKey = tc.key
+				snap.Range = &commonv1.TimeRange{Start: parse(tc.start), End: parse(tc.end)}
+				snap.Bounds = &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_PARTIAL, DataFrom: parse(tc.start), DataTo: parse(tc.to)}
+				snap.CalculatedAt = parse(tc.to)
+				kept := snap.Metrics[:0]
+				for _, m := range snap.Metrics {
+					switch m.MetricId {
+					case "tiles.expense", "expense_categories", "monthly_chart":
+					default:
+						continue
+					}
+					if m.Metric.Filters != nil {
+						m.Metric.Filters.From = parse(tc.start)
+						m.Metric.Filters.To = parse(tc.end)
+					}
+					for _, row := range m.Metric.GetCategories().GetItems() {
+						if row.Filters != nil {
+							row.Filters.From = parse(tc.start)
+							row.Filters.To = parse(tc.end)
+						}
+					}
+					if chart := m.Metric.GetMonthlyChart(); chart != nil {
+						point := chart.Points[len(chart.Points)-1]
+						point.Month = tc.month
+						zoneName := "Europe/Berlin"
+						if tc.period == 3 {
+							zoneName = "Europe/London"
+						}
+						zone, e := time.LoadLocation(zoneName)
+						if e != nil {
+							t.Fatal(e)
+						}
+						month, e := time.Parse("2006-01", tc.month)
+						if e != nil {
+							t.Fatal(e)
+						}
+						start := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, zone)
+						point.Range = &commonv1.TimeRange{Start: timestamppb.New(start), End: timestamppb.New(start.AddDate(0, 1, 0))}
+						point.Bounds = &commonv1.DataBounds{Coverage: 2, DataFrom: timestamppb.New(start), DataTo: parse(tc.to)}
+						chart.Points = []*analyticsv1.MonthlyPoint{point}
+					}
+					kept = append(kept, m)
+				}
+				snap.Metrics = kept
+			}
+			if _, e := ingest.UpsertUserMetrics(producerCtx, req); e != nil {
+				t.Fatal(e)
+			}
+			for mode := commonv1.TransferMode(1); mode <= 2; mode++ {
+				got, e := client.GetAnalytics(userCtx, &analyticsv1.GetAnalyticsRequest{Period: tc.period, PeriodKey: proto.String(tc.key), TransferMode: mode})
+				if e != nil {
+					t.Fatal(e)
+				}
+				source := req.Periods[int(mode)-1]
+				category := screenBlock(got, "expense_categories")
+				if label := category.Data.AsMap()["total"].(map[string]any)["label"]; label != "Всего · "+tc.label+" · неполные данные · идёт пересчёт" {
+					t.Fatalf("guessed old civil day: %v", label)
+				}
+				if !proto.Equal(got.Period.Range, source.Range) || !proto.Equal(got.Period.Bounds, source.Bounds) {
+					t.Fatal("financial range/bounds changed")
+				}
+				point := screenBlock(got, "monthly_chart").Data.AsMap()["points"].([]any)[0].(map[string]any)
+				at, e := time.Parse(time.RFC3339Nano, point["data_to"].(string))
+				if e != nil || !at.Equal(parse(tc.to).AsTime()) || point["note"] != "неполные данные" {
+					t.Fatalf("point instant/precision: %v %v", point, e)
+				}
+				action := category.Data.AsMap()["total"].(map[string]any)["action"].(map[string]any)["filter"].(map[string]any)
+				from, e1 := time.Parse(time.RFC3339Nano, action["from"].(string))
+				to, e2 := time.Parse(time.RFC3339Nano, action["to"].(string))
+				wantMode := "with"
+				if mode == 2 {
+					wantMode = "without"
+				}
+				if e1 != nil || e2 != nil || !from.Equal(source.Range.Start.AsTime()) || !to.Equal(source.Range.End.AsTime()) || action["transfer_mode"] != wantMode {
+					t.Fatal("financial action filter changed")
+				}
+			}
+		})
 	}
 }

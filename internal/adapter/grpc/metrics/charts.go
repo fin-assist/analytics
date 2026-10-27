@@ -166,7 +166,7 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 		typical, err := p.get("tiles.expense.typical")
 		if err == nil && ready(typical) && typical.ValueMinor != nil {
 			text := "Обычно около " + money(typical.GetValueMinor())
-			if basis := monthRange(typical.GetBasis().GetRange(), p.calendar()); basis != "" {
+			if basis := monthRange(typical.GetBasis().GetRange()); basis != "" {
 				text += " — " + basis
 			}
 			notes = append(notes, map[string]any{"text": text, "tone": "muted"})

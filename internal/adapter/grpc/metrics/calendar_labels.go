@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -10,13 +11,11 @@ import (
 	"github.com/fin-assist/analytics/internal/domain"
 )
 
-// snapshotLabelZone retains the calendar of a persisted snapshot while the profile's
-// zone may already have changed. It changes text projection only, never a stored instant.
-// The original IANA name is not in PeriodSnapshot: a mismatched calendar is represented
-// by the offset of its known first midnight, not by an invented IANA zone.
-func snapshotLabelZone(key domain.PeriodKey, r *domain.TimeRange, profile *time.Location) *time.Location {
-	if r == nil || r.Start == nil || r.End == nil || key.Validate() != nil {
-		return profile
+// periodCalendarBounds describes the civil period named by a key. It is used only
+// to check metadata and label a period; stored financial bounds are never replaced.
+func periodCalendarBounds(key domain.PeriodKey, zone *time.Location) (time.Time, time.Time, bool) {
+	if zone == nil || key.Validate() != nil {
+		return time.Time{}, time.Time{}, false
 	}
 	year, _ := strconv.Atoi(key.Key[:4])
 	month, months := 1, 12
@@ -29,53 +28,56 @@ func snapshotLabelZone(key domain.PeriodKey, r *domain.TimeRange, profile *time.
 		month = (quarter-1)*3 + 1
 		months = 3
 	}
-	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, profile)
-	if start.Equal(*r.Start) && start.AddDate(0, months, 0).Equal(*r.End) {
-		return profile
-	}
-	utc := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
-	offset := utc.Sub(*r.Start)
-	if offset < -24*time.Hour || offset > 24*time.Hour {
-		return profile
-	}
-	return time.FixedZone("snapshot-calendar", int(offset/time.Second))
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, zone)
+	return start, start.AddDate(0, months, 0), true
 }
 
-func (p composition) calendar() *time.Location {
-	if p.labels != nil {
-		return p.labels
+func profileCalendarMatches(key domain.PeriodKey, r *domain.TimeRange, profile *time.Location) bool {
+	if r == nil || r.Start == nil || r.End == nil {
+		return false
 	}
-	return p.zone
+	start, end, ok := periodCalendarBounds(key, profile)
+	return ok && start.Equal(*r.Start) && end.Equal(*r.End)
 }
 
-func (p composition) pointCalendar(point *analyticsv1.MonthlyPoint) *time.Location {
+// preciseDays trusts the current profile calendar only for a settled snapshot whose
+// boundaries agree with it. Rebuilding can retain a former IANA calendar even when
+// both endpoint offsets happen to match, so matching offsets alone is insufficient.
+func (p composition) preciseDays() bool {
+	return p.s.State != nil && !p.s.State.Recalculating && profileCalendarMatches(p.s.Key.PeriodKey, &p.s.Range, p.zone)
+}
+
+func (p composition) precisePointDays(point *analyticsv1.MonthlyPoint) bool {
 	r := point.GetRange()
-	if r.GetStart() == nil || r.GetEnd() == nil {
-		return p.calendar()
+	if !p.preciseDays() || r.GetStart() == nil || r.GetEnd() == nil {
+		return false
 	}
 	start, end := r.Start.AsTime(), r.End.AsTime()
-	return snapshotLabelZone(domain.PeriodKey{Type: domain.PeriodMonth, Key: point.GetMonth()}, &domain.TimeRange{Start: &start, End: &end}, p.calendar())
+	return profileCalendarMatches(domain.PeriodKey{Type: domain.PeriodMonth, Key: point.GetMonth()}, &domain.TimeRange{Start: &start, End: &end}, p.zone)
 }
 
-// Basis/comparison bounds are calendar month midnights. A fixed snapshot offset may
-// differ from a historical bound's offset because of DST. Taking the nearest month
-// boundary recovers its calendar month without moving the financial timestamp itself.
-func calendarMonth(ts *timestamppb.Timestamp, labels *time.Location) time.Time {
-	t := ts.AsTime().In(labels)
-	start := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, labels)
-	next := start.AddDate(0, 1, 0)
-	if t.Sub(start) > next.Sub(t) {
-		return next
+func periodName(key domain.PeriodKey) string {
+	start, _, ok := periodCalendarBounds(key, time.UTC)
+	if !ok {
+		return "выбранный период"
 	}
-	return start
+	switch key.Type {
+	case domain.PeriodMonth:
+		return fmt.Sprintf("%s %d", monthNom[start.Month()-1], start.Year())
+	case domain.PeriodQuarter:
+		return fmt.Sprintf("%s квартал %d", [...]string{"I", "II", "III", "IV"}[(start.Month()-1)/3], start.Year())
+	default:
+		return fmt.Sprintf("%d год", start.Year())
+	}
 }
 
-// Coverage starts and gap boundaries are calendar midnights, not operation times.
-// Normalize a historical DST offset difference only for those known boundaries.
-func calendarDay(t time.Time, labels *time.Location) time.Time {
-	t = t.In(labels)
-	start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, labels)
-	next := start.AddDate(0, 0, 1)
+// Basis/comparison endpoints are declared full-calendar-month midnights. Their
+// calendar month is the nearest UTC month boundary (a zone offset is far shorter
+// than half a month). This does not recover IANA or apply to arbitrary operation times.
+func calendarMonth(ts *timestamppb.Timestamp) time.Time {
+	t := ts.AsTime().UTC()
+	start := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	next := start.AddDate(0, 1, 0)
 	if t.Sub(start) > next.Sub(t) {
 		return next
 	}

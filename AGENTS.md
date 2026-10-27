@@ -422,4 +422,4 @@ The service keeps CLI/listener ownership, configuration, access policy, migratio
   READ COMMITTED transaction: guard → state → headers/markers (removal compared with the greater version of both
   modes; relies on the guard's per-user serialization) → children of the applied keys. ListPeriods takes the user
   from the verified sub (a different request user_id is refused) or from user_id of the assistant system call.
-  GetAnalytics is FIN-5 and answers UNIMPLEMENTED. A schema or query change updates `docs/schema.md` and its tests.
+  GetAnalytics is FIN-5: during rebuilding, source IANA is unknown and unverified day captions are suppressed; period keys and stored financial ranges/filters are preserved (docs/server.md). A schema or query change updates `docs/schema.md` and its tests.

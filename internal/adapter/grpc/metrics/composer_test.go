@@ -474,13 +474,14 @@ func TestUnitComposerCountersAndMalformedPresentationFacts(t *testing.T) {
 		t.Fatal("cross-year day text")
 	}
 	basisFrom, basisTo := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	if monthRange(&commonv1.TimeRange{Start: timestamp(&basisFrom), End: timestamp(&basisTo)}, time.UTC) != "декабрь 2025 — январь 2026" {
+	if monthRange(&commonv1.TimeRange{Start: timestamp(&basisFrom), End: timestamp(&basisTo)}) != "декабрь 2025 — январь 2026" {
 		t.Fatal("cross-year month text")
 	}
 	if coverage(99) != "" || coverage(commonv1.Coverage_COVERAGE_NO_DATA) != "no_data" {
 		t.Fatal("coverage fallback")
 	}
-	point := &analyticsv1.MonthlyPoint{Range: &commonv1.TimeRange{Start: timestamp(&from), End: timestamp(&to)}, Bounds: &commonv1.DataBounds{Coverage: 2, DataFrom: timestamp(&from), DataTo: timestamp(&to), Gaps: []*commonv1.TimeRange{{Start: timestamp(&from), End: timestamp(&to)}}}}
+	p.zone, _ = time.LoadLocation(s.State.TimeZone)
+	point := &analyticsv1.MonthlyPoint{Month: s.Key.Key, Range: timerange(&s.Range), Bounds: &commonv1.DataBounds{Coverage: 2, DataFrom: timestamp(&from), DataTo: timestamp(&to), Gaps: []*commonv1.TimeRange{{Start: timestamp(&from), End: timestamp(&to)}}}}
 	if !strings.HasPrefix(p.barNote(point), "без ") {
 		t.Fatal("gap note")
 	}

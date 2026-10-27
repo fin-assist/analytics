@@ -45,11 +45,11 @@ func dayRange(from, to time.Time) string {
 	}
 	return fmt.Sprintf("%d–%s", from.Day(), day(to))
 }
-func monthRange(r *commonv1.TimeRange, zone *time.Location) string {
+func monthRange(r *commonv1.TimeRange) string {
 	if r.GetStart() == nil || r.GetEnd() == nil {
 		return ""
 	}
-	from, to := calendarMonth(r.Start, zone), calendarMonth(r.End, zone).AddDate(0, -1, 0)
+	from, to := calendarMonth(r.Start), calendarMonth(r.End).AddDate(0, -1, 0)
 	if from.Year() != to.Year() {
 		return fmt.Sprintf("%s %d — %s %d", monthNom[from.Month()-1], from.Year(), monthNom[to.Month()-1], to.Year())
 	}
@@ -174,24 +174,27 @@ func (p composition) barPoint(point *analyticsv1.MonthlyPoint, value any) map[st
 }
 func (p composition) barNote(point *analyticsv1.MonthlyPoint) string {
 	b := point.GetBounds()
-	labels := p.pointCalendar(point)
+	labels := p.zone
 	if b.GetCoverage() != commonv1.Coverage_COVERAGE_PARTIAL {
 		return ""
+	}
+	if !p.precisePointDays(point) {
+		return "неполные данные"
 	}
 	if len(b.Gaps) > 0 {
 		g := b.Gaps[0]
 		if g.GetStart() != nil && g.GetEnd() != nil {
-			return "без " + dayRange(calendarDay(g.Start.AsTime(), labels), calendarDay(g.End.AsTime(), labels).AddDate(0, 0, -1))
+			return "без " + dayRange(g.Start.AsTime().In(labels), g.End.AsTime().Add(-time.Nanosecond).In(labels))
 		}
 	}
 	if b.DataTo != nil && point.GetRange().GetEnd() != nil {
-		to, end := b.DataTo.AsTime().In(labels), calendarMonth(point.Range.End, labels).AddDate(0, 0, -1)
+		to, end := b.DataTo.AsTime().In(labels), point.Range.End.AsTime().Add(-time.Nanosecond).In(labels)
 		if to.Day() < end.Day() {
 			return fmt.Sprintf("по %d-е", to.Day())
 		}
 	}
-	if b.DataFrom != nil && calendarDay(b.DataFrom.AsTime(), labels).Day() > 1 {
-		return fmt.Sprintf("с %d-го", calendarDay(b.DataFrom.AsTime(), labels).Day())
+	if b.DataFrom != nil && b.DataFrom.AsTime().In(labels).Day() > 1 {
+		return fmt.Sprintf("с %d-го", b.DataFrom.AsTime().In(labels).Day())
 	}
 	return ""
 }
