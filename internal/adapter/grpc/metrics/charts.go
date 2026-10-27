@@ -78,7 +78,10 @@ func (p composition) balanceChart(ctx context.Context, chartMetric *analyticsv1.
 				return nil, err
 			}
 			if point.GetRange().GetStart() == nil || point.GetRange().GetEnd() == nil {
-				return nil, errors.New("monthly point range absent")
+				// A malformed optional graph must not suppress its independent balance summary.
+				points = []any{}
+				withChart = false
+				break
 			}
 			var value any
 			if point.IncomeMinor != nil && point.ExpenseMinor != nil && point.GetIncomeMinor() > 0 {

@@ -29,22 +29,24 @@ func TestUnitForecastLabelKeepsSelectedKeyAcrossTimezoneRebuild(t *testing.T) {
 }
 
 func TestUnitBalanceSurvivesCorruptMonthlyDetails(t *testing.T) {
-	s := screenFixture(t)
-	fixtureMetric(&s, "monthly_chart").Details = []byte(`{"monthly_chart":"broken"}`)
-	got, err := composerForTest(t).Compose(t.Context(), s, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if screen := byID(got, "monthly_chart"); screen.Status != "unavailable" {
-		t.Fatal(screen)
-	}
-	b := byID(got, "balance")
-	if b.Status != "ready" {
-		t.Fatalf("healthy balance hidden: %+v", b)
-	}
-	d := valueOf(b)
-	if len(d["points"].([]any)) != 0 || d["summary"].(map[string]any)["value"] != float64(7258000) {
-		t.Fatal(d)
+	for _, raw := range []string{`{"monthly_chart":"broken"}`, `{"monthly_chart":{"points":[{"month":"2026-09"}]}}`} {
+		s := screenFixture(t)
+		fixtureMetric(&s, "monthly_chart").Details = []byte(raw)
+		got, err := composerForTest(t).Compose(t.Context(), s, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if screen := byID(got, "monthly_chart"); screen.Status != "unavailable" {
+			t.Fatal(screen)
+		}
+		b := byID(got, "balance")
+		if b.Status != "ready" {
+			t.Fatalf("healthy balance hidden: %+v", b)
+		}
+		d := valueOf(b)
+		if len(d["points"].([]any)) != 0 || d["summary"].(map[string]any)["value"] != float64(7258000) {
+			t.Fatal(d)
+		}
 	}
 }
 

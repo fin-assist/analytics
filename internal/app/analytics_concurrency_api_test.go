@@ -2,7 +2,6 @@ package app_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -125,7 +124,7 @@ func TestAPIGetAnalyticsDefaultIsOneSnapshotDuringConcurrentReplacement(t *testi
 			}
 			assertConcurrentScreen(t, r)
 			if version := int32(r.State.CalculatedAt.AsTime().Sub(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) / time.Second); version < int32(i+1) || version > int32(i+2) {
-				t.Fatal(fmt.Sprintf("unexpected committed version %d in round %d", version, i))
+				t.Fatalf("unexpected committed version %d in round %d", version, i)
 			}
 		}
 		select {
