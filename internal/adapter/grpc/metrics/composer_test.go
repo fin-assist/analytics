@@ -344,6 +344,9 @@ func TestUnitComposerGuardsAndPresentationBoundaries(t *testing.T) {
 	if a := actionJSON(&commonv1.OperationsFilter{Q: ptr("q"), AmountFromMinor: ptr(int64(-1)), AmountToMinor: ptr(int64(0)), TransferMode: 2}, time.UTC); a["filter"].(map[string]any)["transfer_mode"] != "without" {
 		t.Fatal(a)
 	}
+	if actionJSON(&commonv1.OperationsFilter{Q: ptr(""), CategoryId: ptr(""), Selection: ptr("")}, time.UTC) != nil {
+		t.Fatal("blank filter created an action")
+	}
 	if blockAction(nil, time.UTC) != nil {
 		t.Fatal("nil action")
 	}

@@ -78,10 +78,10 @@ func actionJSON(f *commonv1.OperationsFilter, zone *time.Location) map[string]an
 	if f.To != nil {
 		out["to"] = dateString(f.To, zone)
 	}
-	if f.Q != nil {
+	if f.Q != nil && *f.Q != "" {
 		out["q"] = *f.Q
 	}
-	if f.CategoryId != nil {
+	if f.CategoryId != nil && *f.CategoryId != "" {
 		out["category_id"] = *f.CategoryId
 	}
 	switch f.Kind {
@@ -99,7 +99,7 @@ func actionJSON(f *commonv1.OperationsFilter, zone *time.Location) map[string]an
 	if f.AmountToMinor != nil {
 		out["amount_to"] = *f.AmountToMinor
 	}
-	if f.Selection != nil {
+	if f.Selection != nil && *f.Selection != "" {
 		out["selection"] = *f.Selection
 	}
 	if len(out) == 0 {
