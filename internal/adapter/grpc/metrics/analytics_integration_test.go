@@ -110,6 +110,31 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	if resp, e := client.GetAnalytics(systemCtx, &analyticsv1.GetAnalyticsRequest{UserId: proto.String(alice)}); e != nil || !resp.HasData {
 		t.Fatalf("assistant %+v %v", resp, e)
 	}
+	other := analyticsFixture(t)
+	other.UserId = bob
+	for _, snap := range other.Periods {
+		snap.PeriodKey = "2026-10"
+		from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.FixedZone("MSK", 10800))
+		snap.Range = &commonv1.TimeRange{Start: timestamppb.New(from), End: timestamppb.New(from.AddDate(0, 1, 0))}
+		snap.Bounds.DataFrom = timestamppb.New(from)
+		snap.Bounds.DataTo = timestamppb.New(from.AddDate(0, 0, 24))
+		for _, m := range snap.Metrics {
+			if m.MetricId == "tiles.expense" {
+				m.Metric.ValueMinor = proto.Int64(9999900)
+			}
+		}
+	}
+	if _, err := ingest.UpsertUserMetrics(producerCtx, other); err != nil {
+		t.Fatal(err)
+	}
+	own := read(&analyticsv1.GetAnalyticsRequest{})
+	if own.Params.PeriodKey != "2026-09" || own.Navigation.Next != nil || screenBlock(own, "expense_categories").Data.AsMap()["total"].(map[string]any)["value"] != float64(8432000) {
+		t.Fatalf("populated tenant contaminated default/navigation/metrics: %+v", own)
+	}
+	otherResp, err := client.GetAnalytics(otherCtx, &analyticsv1.GetAnalyticsRequest{PeriodKey: proto.String("2026-09")})
+	if err != nil || otherResp.Period.GetBounds().GetCoverage() != commonv1.Coverage_COVERAGE_NO_DATA {
+		t.Fatalf("other user's period leaked: %+v %v", otherResp, err)
+	}
 	got = read(&analyticsv1.GetAnalyticsRequest{Experiments: map[string]string{"analytics_order": "b"}})
 	if got.Blocks[0].Id != "expense_categories" {
 		t.Fatal("experiment")
@@ -254,6 +279,11 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Fatal("partial failure")
 	}
 	exec(`UPDATE period_metric SET details='{"monthly_chart":"broken"}'::jsonb WHERE user_id='01a107db-ae80-7b07-b8a1-00000000a11c' AND metric_id='monthly_chart'`)
+	healthy := read(&analyticsv1.GetAnalyticsRequest{})
+	if screenBlock(healthy, "monthly_chart").Status != "unavailable" || screenBlock(healthy, "balance").Status != "ready" || len(screenBlock(healthy, "balance").Data.AsMap()["points"].([]any)) != 0 {
+		t.Fatal("monthly chart failure suppressed healthy balance summary")
+	}
+	exec(`UPDATE period_metric SET details='{"balance":"broken"}'::jsonb WHERE user_id='01a107db-ae80-7b07-b8a1-00000000a11c' AND metric_id='tiles.balance'`)
 	if _, err := client.GetAnalytics(userCtx, &analyticsv1.GetAnalyticsRequest{Supports: []*commonv1.BlockSupport{{Type: "chart", MaxVersion: 1}}}); status.Code(err) != codes.Unknown {
 		// This transport intentionally omits the production error interceptor; the API suite checks INTERNAL.
 		t.Fatalf("all requested blocks failed: %v", err)
@@ -262,6 +292,14 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		if _, e := client.GetAnalytics(userCtx, r); status.Code(e) != codes.InvalidArgument || server.Reason(e) != "VALIDATION_ERROR" {
 			t.Fatalf("validation %+v: %v", r, e)
 		}
+	}
+	req = analyticsFixture(t)
+	req.CalcVersion = 245
+	req.State.TimeZone = "UTC"
+	write()
+	rebuilt := read(&analyticsv1.GetAnalyticsRequest{})
+	if screenBlock(rebuilt, "tiles").Data.AsMap()["tiles"].([]any)[1].(map[string]any)["caption"] != "на сентябрь" {
+		t.Fatal("forecast caption shifted during timezone rebuild")
 	}
 	// Empty statements are distinct from missing snapshots while the user has other operations.
 	req = analyticsFixture(t)

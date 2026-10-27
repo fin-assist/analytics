@@ -15,11 +15,14 @@ import (
 
 func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, error) {
 	m, err := p.get("monthly_chart")
+	if id == "balance" {
+		if err != nil {
+			m = &analyticsv1.Metric{}
+		}
+		return p.balanceChart(ctx, m)
+	}
 	if err != nil {
 		return nil, err
-	}
-	if id == "balance" {
-		return p.balanceChart(ctx, m)
 	}
 	b := p.base(id, m)
 	if !ready(m) {
@@ -86,10 +89,10 @@ func (p composition) balanceChart(ctx context.Context, chartMetric *analyticsv1.
 	}
 	caption := "Доходов за период нет"
 	if detail := m.GetBalance(); detail != nil && detail.ShareOfIncome != nil {
-		pct := math.Round(detail.GetShareOfIncome() * 100)
-		caption = fmt.Sprintf("%.0f%% дохода: на столько доходы по выписке больше расходов", pct)
-		if pct < 0 {
-			caption = fmt.Sprintf("%.0f%% дохода: на столько расходы по выписке больше доходов", -pct)
+		pct := int64(math.Floor(detail.GetShareOfIncome()*100 + 0.5))
+		caption = fmt.Sprintf("%d%% дохода: на столько доходы по выписке больше расходов", pct)
+		if detail.GetShareOfIncome() < 0 {
+			caption = fmt.Sprintf("%d%% дохода: на столько расходы по выписке больше доходов", -pct)
 		}
 	}
 	if withChart {
@@ -112,7 +115,7 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 		if e1 == nil && e2 == nil && ready(actual) && ready(previous) && actual.ValueMinor != nil && previous.ValueMinor != nil {
 			text := "В прошлом периоде к этому дню расходов не было"
 			if previous.GetValueMinor() != 0 {
-				pct := math.Round((float64(actual.GetValueMinor()) - float64(previous.GetValueMinor())) * 100 / math.Abs(float64(previous.GetValueMinor())))
+				pct := math.Floor((float64(actual.GetValueMinor())-float64(previous.GetValueMinor()))*100/math.Abs(float64(previous.GetValueMinor())) + 0.5)
 				cmp := "столько же, сколько"
 				if pct > 0 {
 					cmp = fmt.Sprintf("на %.0f%% больше, чем", pct)

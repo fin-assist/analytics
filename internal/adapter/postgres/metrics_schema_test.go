@@ -627,6 +627,9 @@ func TestIntegrationRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
 	user := newUser(1)
+	if _, err := upsertState(ctx, db, user, 3, validState()); err != nil {
+		t.Fatal(err)
+	}
 	augWith, augWithout := pk(month, "2026-08", withTransfers), pk(month, "2026-08", withoutTransfers)
 
 	if _, err := upsertProto(ctx, db, user, 3, []*analyticsv1.PeriodSnapshot{
@@ -655,9 +658,9 @@ func TestIntegrationRemovedPeriodStaysRemovedForOlderSnapshots(t *testing.T) {
 	if s, ok := storedPeriod(t, db, user, augWith); !ok || !s.removed || s.version != 5 || len(s.metrics) != 0 {
 		t.Fatalf("2026-08 is %+v (present %v), want a v5 removal marker", s, ok)
 	}
-	var latest *string
-	if err := db.QueryRow(ctx, latestPeriodSQL, user, month).Scan(&latest); err != nil || latest != nil {
-		t.Fatalf("latest period %v, %v; want none: markers are not periods with data", latest, err)
+	latest, err := readAnalyticsRows(ctx, db, user, pk(month, "", withTransfers), nil)
+	if err != nil || latest.selected != nil {
+		t.Fatalf("default read includes removed periods: %+v %v", latest, err)
 	}
 
 	// A removal of an older version does not remove a newer snapshot. The removal is compared
@@ -1208,9 +1211,9 @@ func TestIntegrationReadQueries(t *testing.T) {
 	}
 
 	t.Run("latest period", func(t *testing.T) {
-		var latest string
-		if err := db.QueryRow(ctx, latestPeriodSQL, user, month).Scan(&latest); err != nil || latest != "2026-09" {
-			t.Fatalf("latest %q, %v; want 2026-09 (2026-10 belongs to another user)", latest, err)
+		got, err := readAnalyticsRows(ctx, db, user, pk(month, "", withTransfers), nil)
+		if err != nil || deref(got.selected) != "2026-09" || len(got.snapshot.Metrics) != 2 {
+			t.Fatalf("default read/tenant metrics %+v %v", got, err)
 		}
 	})
 
@@ -1379,9 +1382,9 @@ func TestIntegrationReadQueriesAcrossYearBoundary(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var latest string
-			if err := db.QueryRow(ctx, latestPeriodSQL, user, c.typ).Scan(&latest); err != nil || latest != c.newer {
-				t.Fatalf("latest %q, %v; want %s", latest, err, c.newer)
+			latest, err := readAnalyticsRows(ctx, db, user, pk(c.typ, "", withTransfers), nil)
+			if err != nil || deref(latest.selected) != c.newer || latest.snapshot.Key.Key != c.newer {
+				t.Fatalf("default boundary %+v %v want %s", latest, err, c.newer)
 			}
 
 			got, err := readAnalytics(ctx, db, user, pk(c.typ, c.older, withTransfers))
@@ -1463,6 +1466,12 @@ func TestIntegrationQueriesUsePrimaryKey(t *testing.T) {
 	}
 	user := newUser(1)
 	applied := []any{user, []int16{month, month}, []string{"2026-08", "2026-09"}, []int16{withTransfers, withTransfers}}
+	if _, err := conn.Exec(ctx, "SET plan_cache_mode = force_generic_plan"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, "PREPARE fin5_default_read (uuid,smallint,text,smallint) AS "+readAnalyticsSQL); err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		name  string
 		sql   string
@@ -1478,8 +1487,9 @@ func TestIntegrationQueriesUsePrimaryKey(t *testing.T) {
 		{"get analytics", readAnalyticsSQL, []any{user, month, "2026-08", withTransfers},
 			[]string{"user_data_state_pkey", "period_snapshot_pkey", "period_gap_pkey", "period_metric_pkey"}, true,
 			map[string]int{"(transfer_mode = p.transfer_mode)": 1, "(transfer_mode = '1'::smallint)": 2}},
-		{"latest period", latestPeriodSQL, []any{user, month}, []string{"period_snapshot_pkey"}, false, nil},
+		{"get analytics (default)", readAnalyticsSQL, []any{user, month, nil, withTransfers}, []string{"user_data_state_pkey", "period_snapshot_pkey", "period_gap_pkey", "period_metric_pkey"}, true, nil},
 		// sortOK: the outer ORDER BY of the lateral join sorts the periods of one user and type.
+		{"get analytics (generic default)", `EXECUTE fin5_default_read('01a107db-ae80-7b07-b8a1-000000000001'::uuid,1::smallint,NULL::text,1::smallint)`, nil, []string{"user_data_state_pkey", "period_snapshot_pkey", "period_gap_pkey", "period_metric_pkey"}, true, nil},
 		{"list periods", listPeriodsSQL, []any{user, month}, []string{"user_data_state_pkey", "period_snapshot_pkey"}, true, nil},
 		// The removal check reads the rows of the user by the key prefix (at most the few hundred
 		// headers of one user), never the whole table.

@@ -2,7 +2,9 @@
 
 The Go service `analytics` of «Понятные финансы» (B2C personal finance: OFX statement import from T-Bank, operations,
 analytics, LLM assistant): it stores the ready personal metrics `bank-statement-data` sends and builds the Analytics
-screen from them; it calculates nothing itself (`docs/grpc-api.md` 7.3 in `fin-assist/contracts`). Made from
+screen from them. It does not reaggregate operations or choose financial bases/thresholds: only the display
+quantities of `docs/calc.md` 1/5/10 and `docs/api.md` 6.1 are derived from persisted aggregates
+(monthly balance shares, textual comparisons/ratios, the collapsed payment remainder). Made from
 `fin-assist/go-service-template`. Read by Claude Code (through `CLAUDE.md`) and by Codex. This file is the orientation
 map: read it and `README.md` first, then open only what the task touches.
 

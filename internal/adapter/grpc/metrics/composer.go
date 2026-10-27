@@ -56,7 +56,8 @@ func (p composition) get(id string) (*analyticsv1.Metric, error) {
 	return metric(m)
 }
 
-// Compose projects stored facts; financial totals, thresholds and selections are never recalculated.
+// Compose projects persisted aggregates and derives only the display quantities of
+// calc.md 1/5/10 and api.md 6.1. It never reaggregates operations or chooses bases/thresholds.
 func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*commonv1.BlockSupport, exp map[string]string) (*analyticsv1.GetAnalyticsResponse, error) {
 	zone, err := time.LoadLocation(s.State.TimeZone)
 	if err != nil {
@@ -93,6 +94,9 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 	}
 	available, attempted := 0, 0
 	for _, id := range ids {
+		if id == "heading" && !compatible("insight_card", supports) {
+			continue
+		}
 		if !compatible(blockType(id), supports) {
 			continue
 		}
@@ -406,7 +410,7 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	bal, expense, daily, income := values[ids[0]], values[ids[1]], values[ids[2]], values[ids[3]]
 	share := "Доходов за период нет"
 	if detail := bal.GetBalance(); detail != nil && detail.ShareOfIncome != nil {
-		pct := int64(math.Round(*detail.ShareOfIncome * 100))
+		pct := int64(math.Floor(*detail.ShareOfIncome*100 + 0.5))
 		share = fmt.Sprintf("%d%% дохода · по выписке", pct)
 		if pct < 0 {
 			share = fmt.Sprintf("−%d%% · потратили больше, чем получили", -pct)

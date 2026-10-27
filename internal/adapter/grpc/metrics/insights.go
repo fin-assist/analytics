@@ -130,8 +130,11 @@ func (p composition) insight(ctx context.Context, id string) ([]*commonv1.Block,
 			if a := actionJSON(row.Filters, p.zone); a != nil {
 				item["action"] = a
 			}
-			items = append(items, item)
+			if i > 0 {
+				items = append(items, item)
+			}
 			if i == 0 {
+				b.Action = blockAction(row.Filters, p.zone)
 				description := fmt.Sprintf("в месяц · %s: %d %s по %s — около %s в год", row.Title, row.Count, noun(int64(row.Count), "раз", "раза", "раз"), money(row.AverageAmountMinor), money(row.YearlyAmountMinor))
 				if m.GetBasis().GetRange().GetStart() != nil {
 					base := m.Basis.Range.Start.AsTime().In(p.zone)

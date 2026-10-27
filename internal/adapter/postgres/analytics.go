@@ -51,11 +51,6 @@ LEFT JOIN period_metric m
        ON m.user_id = $1 AND m.period_type = $2 AND m.period_key = h.period_key AND m.transfer_mode = $4
 ORDER BY m.metric_id`
 
-// latestPeriodSQL is the default period of GetAnalytics: the latest period of the type with data.
-const latestPeriodSQL = `
-SELECT max(period_key) FROM period_snapshot
-WHERE user_id = $1 AND period_type = $2 AND NOT removed`
-
 // analyticsRead is the result of readAnalyticsSQL.
 type analyticsRead struct {
 	state          stateRow

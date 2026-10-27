@@ -128,7 +128,7 @@ func TestUnitComposerFullScreenKeepsFactsActionsAndTexts(t *testing.T) {
 	if !strings.HasPrefix(small["description"].(string), "по августу ·") {
 		t.Fatal(small)
 	}
-	if a := small["items"].([]any)[0].(map[string]any)["action"].(map[string]any)["filter"].(map[string]any); a["from"] != "2026-08-01T00:00:00+03:00" || a["selection"] != "s_small_coffee" {
+	if a := actionJSON(byID(got, "small_frequent").Action.Filter, time.FixedZone("MSK", 10800))["filter"].(map[string]any); a["from"] != "2026-08-01T00:00:00+03:00" || a["selection"] != "s_small_coffee" {
 		t.Fatal(a)
 	}
 	chart := valueOf(byID(got, "monthly_chart"))
@@ -328,7 +328,8 @@ func TestUnitComposerGuardsAndPresentationBoundaries(t *testing.T) {
 		t.Fatal("money representation")
 	}
 	for _, n := range []int64{1, 2, 5, 11, 14, 21} {
-		if noun(n, "one", "few", "many") == "" {
+		want := map[int64]string{1: "one", 2: "few", 5: "many", 11: "many", 14: "many", 21: "one"}[n]
+		if noun(n, "one", "few", "many") != want {
 			t.Fatal(n)
 		}
 	}
@@ -475,7 +476,7 @@ func TestUnitComposerCountersAndMalformedPresentationFacts(t *testing.T) {
 	if monthRange(&commonv1.TimeRange{Start: timestamp(&from), End: timestamp(&to)}, time.UTC) != "декабрь 2025 — январь 2026" {
 		t.Fatal("cross-year month text")
 	}
-	if coverage(99) != "partial" || coverage(commonv1.Coverage_COVERAGE_NO_DATA) != "no_data" {
+	if coverage(99) != "" || coverage(commonv1.Coverage_COVERAGE_NO_DATA) != "no_data" {
 		t.Fatal("coverage fallback")
 	}
 	point := &analyticsv1.MonthlyPoint{Range: &commonv1.TimeRange{Start: timestamp(&from), End: timestamp(&to)}, Bounds: &commonv1.DataBounds{Coverage: 2, DataFrom: timestamp(&from), DataTo: timestamp(&to), Gaps: []*commonv1.TimeRange{{Start: timestamp(&from), End: timestamp(&to)}}}}

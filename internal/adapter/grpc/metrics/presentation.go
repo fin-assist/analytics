@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -144,12 +145,17 @@ func coverage(c commonv1.Coverage) string {
 		return "complete"
 	case commonv1.Coverage_COVERAGE_NO_DATA:
 		return "no_data"
-	default:
+	case commonv1.Coverage_COVERAGE_PARTIAL:
 		return "partial"
+	default:
+		return ""
 	}
 }
 func (p composition) barPoint(point *analyticsv1.MonthlyPoint, value any) map[string]any {
-	out := map[string]any{"range": rangeJSON(point.GetRange(), p.zone), "coverage": coverage(point.GetBounds().GetCoverage())}
+	out := map[string]any{"range": rangeJSON(point.GetRange(), p.zone)}
+	if c := coverage(point.GetBounds().GetCoverage()); c != "" {
+		out["coverage"] = c
+	}
 	if value != nil {
 		out["value"] = value
 	}
@@ -202,10 +208,12 @@ func altParts(parts ...string) string {
 func (p composition) forecastCaption() string {
 	switch p.s.Key.Type {
 	case domain.PeriodMonth:
-		return "на " + monthNom[p.s.Range.Start.In(p.zone).Month()-1]
+		month, _ := strconv.Atoi(p.s.Key.Key[5:])
+		return "на " + monthNom[month-1]
 	case domain.PeriodQuarter:
-		return "на " + [...]string{"I", "II", "III", "IV"}[(p.s.Range.Start.In(p.zone).Month()-1)/3] + " квартал"
+		quarter, _ := strconv.Atoi(p.s.Key.Key[6:])
+		return "на " + [...]string{"I", "II", "III", "IV"}[quarter-1] + " квартал"
 	default:
-		return fmt.Sprintf("на %d год", p.s.Range.Start.In(p.zone).Year())
+		return "на " + p.s.Key.Key + " год"
 	}
 }
