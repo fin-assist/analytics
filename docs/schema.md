@@ -246,6 +246,15 @@ metadata; при возврате к новому consumer старые сним
 Как в FIN-283, неизменность содержимого одной версии обеспечивает производитель: analytics
 не вводит отдельный hash или новую проверку совпадения payload при равной версии.
 
+Наличие ревизий в `UserDataState` удостоверяет также полноту доставленного календаря. Перед частями
+каждого пересчёта producer отправляет clearing-состояние без ревизий и ждёт его ACK; состояния внутри
+частей тоже не содержат ревизий. Финальный state с ревизиями отправляется только после ACK всех
+частей и удалений. Поэтому пересечение с состоянием не даёт подтвердить частично доставленный набор,
+даже если source counters не изменились и все уже существующие заголовки совпадают. Это правило
+независимо от `recalculating`: daily/registry rebuild оставляют пользовательский флаг выключенным.
+Отсутствующий выбранный период, navigation, `has_data=false` и пустой `ListPeriods` также используют
+этот state proof; clearing/legacy state оставляет весь вектор неизвестным.
+
 `GetAnalytics` читает всё одним statement snapshot. При наличии выбранного снимка возвращает
 пересечение известных одинаковых ревизий его metadata и использованного состояния экрана,
 включая `recalculating=true`: состояние влияет на пояс, покрытие, полные месяцы и stale.
@@ -265,7 +274,7 @@ provenance, прежние финансовые поля остаются отс
 | --- | --- |
 | Не более32 записей, уникальный code, ASCII `[a-z][a-z0-9_]{0,63}`, значение ≥0; unknown valid code сохраняется. Неверная metadata любого state/period отклоняет весь ingest bare INVALID_ARGUMENT до эффектов | `TestUnitRevisionMetadataIsOpenBoundedAndExact`, `TestUnitRevisionConversionPreservesOpenCodesWithoutLoss`, `TestAPISourceRevisionsRejectInvalidWholeBatch` и integration-эквивалент |
 | Метаданные принадлежат конкретному выбранному снимку/состоянию; lower-version/retry не искажают provenance; last delete/purge/late write не воскрешают данные | `TestAPISourceProvenanceBelongsToSelectedSnapshot` и integration-эквивалент |
-| Пустая/частичная/legacy metadata не получает ложную baseline; составные ответы возвращают per-code intersection с использованным состоянием | `TestUnitResponseProvenanceIntersectsEveryUsedSource`, `TestUnitPeriodProvenanceIncludesUsedScreenState`, `TestAPIResponseProvenanceIncludesStateAndSnapshot` и integration-эквивалент, `TestIntegrationProvenanceUpgradeDoesNotInventLegacyBaselines` |
+| Пустая/частичная/legacy metadata не получает ложную baseline; составные ответы возвращают per-code intersection с использованным состоянием, clearing ждёт final completion proof | `TestUnitResponseProvenanceIntersectsEveryUsedSource`, `TestUnitPeriodProvenanceIncludesUsedScreenState`, `TestAPIResponseProvenanceIncludesStateAndSnapshot`, `TestAPISourceProvenanceRequiresFinalCompletionProof` и integration-эквиваленты, `TestIntegrationProvenanceUpgradeDoesNotInventLegacyBaselines` |
 | Хранимые invalid JSON/negative/overflowed revisions дают внутреннюю ошибку чтения, не пользовательскую validation и не тихое подтверждение свежести | `TestUnitRevisionJSONPreservesInt64AndRejectsCorruptStorage`, `TestUnitAnalyticsReadRejectsCorruptStoredProvenance`, `TestAPIStoredRevisionNullIsNotKnownZero` и integration-эквивалент |
 
 Порядок внедрения: опубликованный контрактный тег → этот analytics consumer и BFF с текстом

@@ -302,7 +302,7 @@ func TestUnitListPeriodsTranslatesRows(t *testing.T) {
 		wantErr error
 	}{
 		"periods": {rows: &scriptedRows{values: [][]any{{&zone, &key, &start, &end, &coverage, nil, nil}}},
-			want: domain.Periods{TimeZone: zone, Items: []domain.PeriodItem{{Key: key, Start: start, End: end, Coverage: domain.CoverageComplete}}}},
+			want: domain.Periods{Revisions: domain.Revisions{}, TimeZone: zone, Items: []domain.PeriodItem{{Key: key, Start: start, End: end, Coverage: domain.CoverageComplete}}}},
 		"neither state nor periods": {rows: &scriptedRows{values: [][]any{{nil, nil, nil, nil, nil, nil, nil}}}},
 		"a state without periods":   {rows: &scriptedRows{values: [][]any{{&zone, nil, nil, nil, nil, nil, nil}}}, want: domain.Periods{TimeZone: zone}},
 		"a header without its data": {rows: &scriptedRows{values: [][]any{{&zone, &key, nil, &end, &coverage, nil, nil}}}, wantErr: errBrokenHeader},

@@ -272,10 +272,12 @@ func corruptRevisionScenario(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, table := range []string{"user_data_state", "period_snapshot"} {
+	for _, storage := range []struct{ table, update string }{
+		{"user_data_state", `UPDATE user_data_state SET data_revisions=$2 WHERE user_id=$1`},
+		{"period_snapshot", `UPDATE period_snapshot SET data_revisions=$2 WHERE user_id=$1`},
+	} {
 		for _, bad := range []string{`{"uploads":null}`, `{"uploads":true}`, `{"uploads":0.0}`, `[]`} {
-			query := "UPDATE " + table + " SET data_revisions=$2 WHERE user_id=$1"
-			if _, err := env.App.DB.Primary().Exec(t.Context(), query, alice, bad); err != nil {
+			if _, err := env.App.DB.Primary().Exec(t.Context(), storage.update, alice, bad); err != nil {
 				t.Fatal(err)
 			}
 			for _, read := range []func() error{
@@ -289,7 +291,7 @@ func corruptRevisionScenario(t *testing.T) {
 				},
 			} {
 				if err := read(); status.Code(err) != codes.Internal {
-					t.Fatal("corrupt source claimed known provenance", table, bad, err)
+					t.Fatal("corrupt source claimed known provenance", storage.table, bad, err)
 				}
 			}
 			foreign, err := c.analytics.GetAnalytics(apitest.User(t.Context(), bob), &pb.GetAnalyticsRequest{PeriodKey: proto.String("2026-09")})
@@ -298,8 +300,7 @@ func corruptRevisionScenario(t *testing.T) {
 			}
 			revisionsWant(t, foreign.DataRevisions, known)
 		}
-		query := "UPDATE " + table + " SET data_revisions=$2 WHERE user_id=$1"
-		if _, err := env.App.DB.Primary().Exec(t.Context(), query, alice, `{"categories":0,"uploads":0,"time_zone":0}`); err != nil {
+		if _, err := env.App.DB.Primary().Exec(t.Context(), storage.update, alice, `{"categories":0,"uploads":0,"time_zone":0}`); err != nil {
 			t.Fatal(err)
 		}
 	}
