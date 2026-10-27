@@ -170,7 +170,7 @@ func (p composition) emptyInsight(id string, m *analyticsv1.Metric) string {
 	case "notable_spending":
 		return "Заметных трат не нашли — расходы по категориям в пределах обычного"
 	case "bank_fees":
-		return "Комиссий за " + p.caption() + " нет"
+		return p.emptyPeriodText("Комиссий за ")
 	default:
 		return "Мелких частых трат не нашли"
 	}

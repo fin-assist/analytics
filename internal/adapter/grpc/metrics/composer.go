@@ -370,25 +370,41 @@ func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockL
 	return out
 }
 
-func (p composition) caption() string {
+// captionParts keeps the financial period label separate from precision notes.
+func (p composition) captionParts() (string, string) {
 	if !p.preciseDays() {
-		text := periodName(p.s.Key.PeriodKey)
-		if p.s.Snapshot != nil && p.s.Snapshot.Coverage == domain.CoveragePartial {
-			text += " · неполные данные"
-		}
+		note := "сохранённый расчёт"
 		if p.s.State != nil && p.s.State.Recalculating {
-			text += " · идёт пересчёт"
-		} else {
-			text += " · сохранённый расчёт"
+			note = "идёт пересчёт"
 		}
-		return text
+		if p.s.Snapshot != nil && p.s.Snapshot.Coverage == domain.CoveragePartial {
+			note = "неполные данные · " + note
+		}
+		return periodName(p.s.Key.PeriodKey), note
 	}
 	from, to := *p.s.Range.Start, p.s.Range.End.Add(-time.Nanosecond)
 	if p.s.Snapshot != nil {
 		from = *p.s.Snapshot.DataFrom
 		to = *p.s.Snapshot.DataTo
 	}
-	return dayRange(from.In(p.zone), to.In(p.zone))
+	return dayRange(from.In(p.zone), to.In(p.zone)), ""
+}
+
+func (p composition) caption() string {
+	text, note := p.captionParts()
+	if note != "" {
+		text += " · " + note
+	}
+	return text
+}
+
+func (p composition) emptyPeriodText(prefix string) string {
+	period, note := p.captionParts()
+	text := prefix + period + " нет"
+	if note != "" {
+		text += " · " + note
+	}
+	return text
 }
 
 func (p composition) tile(id, label string, m *analyticsv1.Metric, caption string) map[string]any {
@@ -491,7 +507,7 @@ func (p composition) categories(ctx context.Context, id string) (*commonv1.Block
 	b := p.base(id, m)
 	if !ready(m) {
 		if metricStatus(m) == "none" {
-			b.EmptyText = ptr(title(id) + ": за " + p.caption() + " нет")
+			b.EmptyText = ptr(p.emptyPeriodText(title(id) + ": за "))
 		}
 		return b, nil
 	}

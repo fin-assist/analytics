@@ -235,6 +235,35 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 			t.Fatal(b)
 		}
 	}
+	// Precision notes belong after the complete negation, never between its words.
+	for _, tc := range []struct {
+		recalculating bool
+		coverage      commonv1.Coverage
+		tail          string
+	}{
+		{true, 2, "сентябрь 2026 нет · неполные данные · идёт пересчёт"},
+		{true, 1, "сентябрь 2026 нет · идёт пересчёт"},
+		{false, 2, "сентябрь 2026 нет · неполные данные · сохранённый расчёт"},
+		{false, 1, "сентябрь 2026 нет · сохранённый расчёт"},
+	} {
+		req.State.TimeZone = "UTC"
+		req.State.Recalculating = tc.recalculating
+		for _, snap := range req.Periods {
+			snap.Bounds.Coverage = tc.coverage
+		}
+		write()
+		got = read(&analyticsv1.GetAnalyticsRequest{})
+		for _, want := range []struct{ id, prefix string }{{"expense_categories", "Расходы по категориям: за "}, {"income_categories", "Доходы по категориям: за "}, {"bank_fees", "Комиссий за "}} {
+			b := screenBlock(got, want.id)
+			text := want.prefix + tc.tail
+			if b.Status != "none" || b.GetEmptyText() != text {
+				t.Fatalf("%s empty_text: %q, want %q", want.id, b.GetEmptyText(), text)
+			}
+			if want.id == "bank_fees" && b.GetAltText() != text {
+				t.Fatalf("bank-fee alt_text: %q, want %q", b.GetAltText(), text)
+			}
+		}
+	}
 	req = analyticsFixture(t)
 	req.CalcVersion = 210
 	for _, s := range req.Periods {
