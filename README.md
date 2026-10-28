@@ -16,6 +16,25 @@
 
 [Политика Renovate](docs/renovate-policy.md) (FIN-211): одна актуальная release/main, автомерж полностью ботских PR после обязательного CI, один повтор красного CI и закрытие с явным повтором через Dependency Dashboard. AndroidX/Compose остаются на ручной проверке. Исходные группировки, ограничения версий и расписания — `renovate-base.json`; generated target и quarantine — ветка `renovate-policy`. Активация требует отдельного токена и строгой защиты веток; по умолчанию выключена.
 
+## Ревизии исходных данных (FIN-369)
+
+Ревизии состояния подтверждают полный доставленный календарь: clearing перед частями убирает proof,
+а финальный state возвращает его после всех ACK. Это действует и для ежедневного пересчёта без
+пользовательского `recalculating`; частичные/пустые ответы до final остаются неизвестными.
+Metadata привязана к версии финансовой строки: запись старым образом после rollback автоматически
+делает её неизвестной при rollforward. Более новый header/removal marker также снимает state proof;
+ручная очистка metadata перед откатом не требуется.
+
+`analytics` сохраняет provenance из FIN-367 атомарно с метриками и состоянием. Ответ аналитики
+возвращает пересечение известных одинаковых ревизий выбранного снимка и использованного состояния
+экрана, включая `recalculating`-состояние; при отсутствии
+снимка и `has_data=false` — ревизии использованного состояния. Непустой `ListPeriods` возвращает
+только совпадающие известные ревизии всех фактически выбранных заголовков и состояния; пустой — состояние.
+Прежний снимок без metadata остаётся неизвестным. Неизвестные валидные коды и точные int64
+сохраняются, REST не получает внутреннюю provenance. Схема/инварианты — [docs/schema.md](docs/schema.md).
+Производитель этого metadata в bank-statement-data — отдельный PR FIN-369 после FIN-357;
+сравнение в истории помощника — FIN-368. Выкатка потребителя предшествует производителю.
+
 ## Что реализовано и что нет
 
 - **FIN-330** ([FIN-282](https://finassist.youtrack.cloud/issue/FIN-282), [FIN-283](https://finassist.youtrack.cloud/issue/FIN-283), [FIN-290](https://finassist.youtrack.cloud/issue/FIN-290)): `AUTH_MODE=verify` через `go-identity v0.2.0` `NewAssembly` (prod — Kubernetes ServiceAccount, stage — файлы ключей, переменные `AUTH_*` как в assistant), `go-tombstone v0.1.0` вместо `NoTombstones` (admission `TOKEN_REVOKED`, `Guard` в записи, источник миграций перед сервисным); `MetricsIngestService.UpsertUserMetrics`, `AnalyticsService.ListPeriods` и `UserDeletionService.PurgeUserData` по схеме FIN-113 и правилам записи contracts#60 ([docs/schema.md](docs/schema.md)); `make test-names` классифицирует fuzz-цели и отклоняет `Example…`.
@@ -86,6 +105,11 @@ CI (`.github/workflows/ci.yml`):
 make test   # Docker for testcontainers, or TEST_DATABASE_URL=postgres://... to use your PostgreSQL
 make lint
 ```
+
+Integration-проверки provenance напрямую связывают domain-сервисы, реальные транзакции, tombstone guard
+и PostgreSQL-репозиторий (`internal/metrics/source_revisions_*integration_test.go`). Публичные gRPC-сценарии
+полной сборки остаются только API (`internal/app/source_revisions_*test.go`); один API helper не дублируется
+под Integration-именем ради покрытия.
 
 ### Покрытие statements по трём наборам (FIN-238)
 

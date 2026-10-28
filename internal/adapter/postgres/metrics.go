@@ -22,8 +22,8 @@ import (
 const upsertStateSQL = `
 INSERT INTO user_data_state AS s
     (user_id, calc_version, has_data, data_from, data_to, last_operation_at, stale_after,
-     full_months, recalculating, time_zone, calculated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     full_months, recalculating, time_zone, calculated_at,data_revisions)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,CASE WHEN $12::jsonb IS NULL THEN NULL ELSE jsonb_build_object('calc_version',$2::integer,'revisions',$12::jsonb) END)
 ON CONFLICT (user_id) DO UPDATE
 SET calc_version = EXCLUDED.calc_version,
     has_data = EXCLUDED.has_data,
@@ -35,6 +35,7 @@ SET calc_version = EXCLUDED.calc_version,
     recalculating = EXCLUDED.recalculating,
     time_zone = EXCLUDED.time_zone,
     calculated_at = EXCLUDED.calculated_at,
+    data_revisions=EXCLUDED.data_revisions,
     applied_at = now()
 WHERE s.calc_version <= EXCLUDED.calc_version
 RETURNING s.user_id`
@@ -54,14 +55,15 @@ RETURNING s.user_id`
 const upsertHeadersSQL = `
 INSERT INTO period_snapshot AS s
     (user_id, period_type, period_key, transfer_mode, calc_version, removed,
-     range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at)
+     range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at,data_revisions)
 SELECT $1, p.period_type, p.period_key, p.transfer_mode, $2, p.removed,
-       p.range_start, p.range_end, p.coverage, p.data_from, p.data_to, p.unread_lines_count, p.calculated_at
+       p.range_start, p.range_end, p.coverage, p.data_from, p.data_to, p.unread_lines_count, p.calculated_at,
+       CASE WHEN p.data_revisions IS NULL THEN NULL ELSE jsonb_build_object('calc_version',$2::integer,'revisions',p.data_revisions) END
 FROM unnest($3::smallint[], $4::text[], $5::smallint[], $6::boolean[],
             $7::timestamptz[], $8::timestamptz[], $9::smallint[], $10::timestamptz[], $11::timestamptz[],
-            $12::integer[], $13::timestamptz[])
+            $12::integer[], $13::timestamptz[],$14::jsonb[])
     AS p (period_type, period_key, transfer_mode, removed,
-          range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at)
+          range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at,data_revisions)
 WHERE NOT p.removed OR NOT EXISTS (
     SELECT 1 FROM period_snapshot o
     WHERE o.user_id = $1 AND o.period_type = p.period_type AND o.period_key = p.period_key
@@ -77,6 +79,7 @@ SET calc_version = EXCLUDED.calc_version,
     data_to = EXCLUDED.data_to,
     unread_lines_count = EXCLUDED.unread_lines_count,
     calculated_at = EXCLUDED.calculated_at,
+    data_revisions=EXCLUDED.data_revisions,
     applied_at = now()
 WHERE s.calc_version <= EXCLUDED.calc_version
 RETURNING s.period_type, s.period_key, s.transfer_mode, s.removed`
@@ -131,12 +134,21 @@ FROM unnest($2::smallint[], $3::text[], $4::smallint[], $5::text[], $6::integer[
 // snapshot of data. The outer VALUES row gives one row with NULL period columns when there is
 // neither state nor periods; the lateral subquery reads the primary key in order, the outer
 // ORDER BY sorts at most the periods of one user and type (120 months in 10 years).
+// The state proof check is materialized once, across every type/mode/removal marker,
+// so a header-only old-image write cannot certify a missing/empty selected type.
 const listPeriodsSQL = `
-SELECT s.time_zone, p.period_key, p.range_start, p.range_end, p.coverage
+WITH proven_state AS MATERIALIZED (
+    SELECT s.user_id,s.time_zone,s.calc_version,CASE WHEN NOT EXISTS (
+        SELECT 1 FROM period_snapshot newer
+        WHERE newer.user_id = s.user_id AND newer.calc_version > s.calc_version
+    ) THEN s.data_revisions END AS proven_revisions
+    FROM user_data_state s WHERE s.user_id = $1
+)
+SELECT s.time_zone,p.period_key,p.range_start,p.range_end,p.coverage,s.proven_revisions,p.data_revisions,s.calc_version,p.calc_version
 FROM (VALUES ($1::uuid)) AS u (user_id)
-LEFT JOIN user_data_state s ON s.user_id = u.user_id
+LEFT JOIN proven_state s ON s.user_id = u.user_id
 LEFT JOIN LATERAL (
-    SELECT DISTINCT ON (n.period_key) n.period_key, n.range_start, n.range_end, n.coverage
+    SELECT DISTINCT ON (n.period_key) n.period_key,n.range_start,n.range_end,n.coverage,n.data_revisions,n.calc_version
     FROM period_snapshot n
     WHERE n.user_id = u.user_id AND n.period_type = $2 AND NOT n.removed
     ORDER BY n.period_key DESC, n.transfer_mode DESC
@@ -219,14 +231,22 @@ func listPeriods(ctx context.Context, q querier, userID string, typ domain.Perio
 	}
 	defer rows.Close()
 	var out domain.Periods
+	var stateRevisions domain.Revisions
+	havePeriod := false
 	for rows.Next() {
 		var (
-			zone       *string
-			key        *string
-			start, end *time.Time
-			coverage   *int16
+			zone                        *string
+			key                         *string
+			start, end                  *time.Time
+			coverage                    *int16
+			stateJSON, periodJSON       []byte
+			stateVersion, periodVersion *int32
 		)
-		if err := rows.Scan(&zone, &key, &start, &end, &coverage); err != nil {
+		if err := rows.Scan(&zone, &key, &start, &end, &coverage, &stateJSON, &periodJSON, &stateVersion, &periodVersion); err != nil {
+			return domain.Periods{}, err
+		}
+		stateRevisions, err = revisionsFromJSON(stateJSON, stateVersion)
+		if err != nil {
 			return domain.Periods{}, err
 		}
 		if zone != nil {
@@ -238,10 +258,25 @@ func listPeriods(ctx context.Context, q querier, userID string, typ domain.Perio
 		if start == nil || end == nil || coverage == nil {
 			return domain.Periods{}, fmt.Errorf("%w: period %s", errBrokenHeader, *key)
 		}
+		provenance, e := revisionsFromJSON(periodJSON, periodVersion)
+		if e != nil {
+			return domain.Periods{}, e
+		}
+		if !havePeriod {
+			out.Revisions = provenance
+			havePeriod = true
+		} else {
+			out.Revisions = out.Revisions.Intersect(provenance)
+		}
 		out.Items = append(out.Items, domain.PeriodItem{Key: *key, Start: *start, End: *end, Coverage: domain.Coverage(*coverage)})
 	}
 	if err := rows.Err(); err != nil {
 		return domain.Periods{}, err
+	}
+	if !havePeriod {
+		out.Revisions = stateRevisions
+	} else {
+		out.Revisions = out.Revisions.Intersect(stateRevisions)
 	}
 	return out, nil
 }
@@ -259,6 +294,8 @@ func (r *Metrics) Purge(ctx context.Context, userID string) error {
 
 // stateRow is UserDataState as the columns of user_data_state.
 type stateRow struct {
+	version              *int32
+	revisions            []byte
 	hasData              bool
 	dataFrom, dataTo     *time.Time
 	lastOperation, stale *time.Time
@@ -272,13 +309,13 @@ func stateRowOf(s domain.State) stateRow {
 	return stateRow{
 		hasData: s.HasData, dataFrom: s.DataFrom, dataTo: s.DataTo,
 		lastOperation: s.LastOperationAt, stale: s.StaleAfter, fullMonths: s.FullMonths,
-		recalculating: s.Recalculating, timeZone: s.TimeZone, calculatedAt: s.CalculatedAt,
+		recalculating: s.Recalculating, timeZone: s.TimeZone, calculatedAt: s.CalculatedAt, revisions: revisionsJSON(s.Revisions),
 	}
 }
 
 func upsertState(ctx context.Context, q querier, user string, version int32, s stateRow) (applied bool, err error) {
 	rows, err := q.Query(ctx, upsertStateSQL, user, version, s.hasData, s.dataFrom, s.dataTo,
-		s.lastOperation, s.stale, s.fullMonths, s.recalculating, s.timeZone, s.calculatedAt)
+		s.lastOperation, s.stale, s.fullMonths, s.recalculating, s.timeZone, s.calculatedAt, s.revisions)
 	if err != nil {
 		return false, err
 	}
@@ -299,6 +336,8 @@ type periodKey struct {
 
 // headerRow is a row of period_snapshot: a snapshot header or, with removed, a marker.
 type headerRow struct {
+	version   *int32
+	revisions []byte
 	periodKey
 	removed          bool
 	rangeStart       *time.Time
@@ -404,7 +443,7 @@ func headerOf(s domain.Snapshot) (headerRow, error) {
 		dataFrom:     s.DataFrom,
 		dataTo:       s.DataTo,
 		unreadLines:  ptr(s.UnreadLines),
-		calculatedAt: s.CalculatedAt,
+		calculatedAt: s.CalculatedAt, revisions: revisionsJSON(s.Revisions),
 	}, nil
 }
 
@@ -521,7 +560,8 @@ func upsertPeriods(ctx context.Context, q querier, user string, version int32,
 		column(headers, func(h headerRow) *time.Time { return h.dataFrom }),
 		column(headers, func(h headerRow) *time.Time { return h.dataTo }),
 		column(headers, func(h headerRow) *int32 { return h.unreadLines }),
-		column(headers, func(h headerRow) *time.Time { return h.calculatedAt }))
+		column(headers, func(h headerRow) *time.Time { return h.calculatedAt }),
+		column(headers, func(h headerRow) []byte { return h.revisions }))
 	if err != nil {
 		return nil, err
 	}

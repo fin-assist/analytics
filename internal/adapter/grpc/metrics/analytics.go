@@ -47,9 +47,22 @@ func (h *analytics) GetAnalytics(ctx context.Context, req *analyticsv1.GetAnalyt
 		return nil, err
 	}
 	if screen.State == nil || !screen.State.HasData {
-		return &analyticsv1.GetAnalyticsResponse{}, nil
+		var revisions domain.Revisions
+		if screen.State != nil {
+			revisions = screen.State.Revisions
+		}
+		return &analyticsv1.GetAnalyticsResponse{DataRevisions: revisionMessages(revisions)}, nil
 	}
-	return h.composer.Compose(ctx, screen, req.Supports, req.Experiments)
+	response, err := h.composer.Compose(ctx, screen, req.Supports, req.Experiments)
+	if err != nil {
+		return nil, err
+	}
+	revisions := screen.State.Revisions
+	if screen.Snapshot != nil {
+		revisions = screen.Snapshot.Revisions.Intersect(screen.State.Revisions)
+	}
+	response.DataRevisions = revisionMessages(revisions)
+	return response, nil
 }
 
 func validation(field string) error {

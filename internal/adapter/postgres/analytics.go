@@ -14,8 +14,16 @@ import (
 // and the metrics — one row per metric, the head repeated. No row: the user has no state yet.
 // has_snapshot false: no snapshot for this key and mode (one row, metric columns NULL).
 // The head is MATERIALIZED so that the neighbours are looked up once, not per metric row.
+// State completion proof is checked once across all headers, including removed markers:
+// an old image may advance a header without advancing the still-known state.
 const readAnalyticsSQL = `
-WITH chosen AS (SELECT coalesce($3::text, (SELECT max(period_key) FROM period_snapshot
+WITH proven_state AS MATERIALIZED (
+    SELECT s.*, CASE WHEN NOT EXISTS (
+        SELECT 1 FROM period_snapshot newer
+        WHERE newer.user_id = s.user_id AND newer.calc_version > s.calc_version
+    ) THEN s.data_revisions END AS proven_revisions
+    FROM user_data_state s WHERE s.user_id = $1
+), chosen AS (SELECT coalesce($3::text, (SELECT max(period_key) FROM period_snapshot
     WHERE user_id = $1 AND period_type = $2 AND NOT removed)) AS period_key),
 head AS MATERIALIZED (
     SELECT c.period_key, s.has_data, s.data_from AS state_data_from, s.data_to AS state_data_to, s.last_operation_at,
@@ -26,8 +34,10 @@ head AS MATERIALIZED (
            (SELECT max(n.period_key) FROM period_snapshot n
              WHERE n.user_id = s.user_id AND n.period_type = $2 AND n.period_key < c.period_key AND NOT n.removed) AS previous,
            (SELECT min(n.period_key) FROM period_snapshot n
-             WHERE n.user_id = s.user_id AND n.period_type = $2 AND n.period_key > c.period_key AND NOT n.removed) AS next
-    FROM user_data_state s CROSS JOIN chosen c
+             WHERE n.user_id = s.user_id AND n.period_type = $2 AND n.period_key > c.period_key AND NOT n.removed) AS next,
+           s.proven_revisions AS state_revisions,p.data_revisions AS snapshot_revisions,
+           s.calc_version AS state_version,p.calc_version AS snapshot_version
+    FROM proven_state s CROSS JOIN chosen c
     LEFT JOIN period_snapshot p
            ON p.user_id = s.user_id AND p.period_type = $2 AND p.period_key = c.period_key AND p.transfer_mode = $4
           AND NOT p.removed
@@ -87,7 +97,7 @@ func readAnalyticsRows(ctx context.Context, q querier, user string, key periodKe
 			&out.state.stale, &out.state.fullMonths, &out.state.recalculating, &out.state.timeZone,
 			&out.state.calculatedAt,
 			&hasSnapshot, &header.rangeStart, &header.rangeEnd, &header.coverage, &header.dataFrom, &header.dataTo,
-			&header.unreadLines, &header.calculatedAt, &gapStarts, &gapEnds, &out.previous, &out.next,
+			&header.unreadLines, &header.calculatedAt, &gapStarts, &gapEnds, &out.previous, &out.next, &out.state.revisions, &header.revisions, &out.state.version, &header.version,
 			&metricID, &definitionVersion, &status, &m.valueMinor, &m.rangeStart, &m.rangeEnd,
 			&m.lockReason, &m.lockRequired, &m.lockAvailable, &m.lockAvailableFrom,
 			&m.basisStart, &m.basisEnd, &m.basisFullMonths,
@@ -135,6 +145,10 @@ func (r *Metrics) ReadAnalytics(ctx context.Context, user string, typ domain.Per
 	state := domain.State{HasData: data.state.hasData, DataFrom: data.state.dataFrom, DataTo: data.state.dataTo,
 		LastOperationAt: data.state.lastOperation, StaleAfter: data.state.stale, FullMonths: data.state.fullMonths,
 		Recalculating: data.state.recalculating, TimeZone: data.state.timeZone, CalculatedAt: data.state.calculatedAt}
+	state.Revisions, err = revisionsFromJSON(data.state.revisions, data.state.version)
+	if err != nil {
+		return domain.AnalyticsData{}, err
+	}
 	return domain.AnalyticsData{State: &state, Snapshot: data.snapshot, Previous: data.previous, Next: data.next, SelectedKey: data.selected}, nil
 }
 
@@ -142,7 +156,11 @@ func domainSnapshot(key periodKey, h headerRow, starts, ends []time.Time, rows [
 	if h.rangeStart == nil || h.rangeEnd == nil || h.coverage == nil || h.dataFrom == nil || h.dataTo == nil || h.unreadLines == nil || h.calculatedAt == nil || len(starts) != len(ends) {
 		return nil, fmt.Errorf("%w: incomplete snapshot", errBrokenHeader)
 	}
-	out := &domain.Snapshot{Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: domain.PeriodType(key.typ), Key: key.key}, Mode: domain.TransferMode(key.mode)},
+	revisions, err := revisionsFromJSON(h.revisions, h.version)
+	if err != nil {
+		return nil, err
+	}
+	out := &domain.Snapshot{Revisions: revisions, Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: domain.PeriodType(key.typ), Key: key.key}, Mode: domain.TransferMode(key.mode)},
 		Range: &domain.TimeRange{Start: h.rangeStart, End: h.rangeEnd}, Coverage: domain.Coverage(*h.coverage), DataFrom: h.dataFrom, DataTo: h.dataTo, UnreadLines: *h.unreadLines, CalculatedAt: h.calculatedAt}
 	for i := range starts {
 		out.Gaps = append(out.Gaps, domain.TimeRange{Start: &starts[i], End: &ends[i]})

@@ -1495,7 +1495,7 @@ func TestIntegrationQueriesUsePrimaryKey(t *testing.T) {
 		// headers of one user), never the whole table.
 		{"headers and markers", upsertHeadersSQL, []any{user, int32(2), []int16{month, month}, []string{"2026-08", "2026-08"},
 			[]int16{withTransfers, withoutTransfers}, []bool{true, true}, []*time.Time{nil, nil}, []*time.Time{nil, nil},
-			[]*int16{nil, nil}, []*time.Time{nil, nil}, []*time.Time{nil, nil}, []*int32{nil, nil}, []*time.Time{nil, nil}},
+			[]*int16{nil, nil}, []*time.Time{nil, nil}, []*time.Time{nil, nil}, []*int32{nil, nil}, []*time.Time{nil, nil}, [][]byte{nil, nil}},
 			[]string{"period_snapshot_pkey"}, true, nil},
 		{"replace children", deleteChildrenSQL, applied, []string{"period_gap_pkey", "period_metric_pkey"}, false,
 			map[string]int{"AND (transfer_mode = a": 2}},

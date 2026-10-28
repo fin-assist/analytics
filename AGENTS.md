@@ -78,6 +78,8 @@ and `testdb.DefaultImage` (PostgreSQL). Main pieces: grpc-go, protobuf, protoval
 prometheus client_golang, testcontainers-go, squawk; the fin-assist libraries above. A new dependency is named in
 the PR with why it is needed.
 
+FIN-369 persists bounded open source revisions in nullable JSONB on state and period headers. Private JSONB envelopes bind revisions to the exact row calc_version, checked on reads; newer user headers/removal markers invalidate state proof once per coherent read, including rollback/rollforward. Legacy metadata stays unknown; state revisions are the producer's final inventory completion proof (cleared and ACKed before parts, restored only after every part/removal ACK), independently of the user-action flag. GetAnalytics intersects the selected header with the used screen state; ListPeriods intersects the headers its existing mode selection actually reads with that state. Stored non-integer/null values fail closed instead of becoming known zero. Domain validation and DTO conversion refuse invalid revisions before writing with the existing bare internal ingest error. See docs/schema.md, «Ревизии исходных данных».
+
 ## Build in an agent container
 
 - Go: the toolchain from `go.mod` is downloaded by `GOTOOLCHAIN=auto` (the default) on the first `go` command.
@@ -200,6 +202,11 @@ Priorities when they pull apart, in this order:
   not obvious (accounting rules, idempotency, locks, transaction boundaries), not on every function.
 
 ## Tests
+
+Business suite boundaries are independent: integration calls domain services/adapters with real
+PostgreSQL transactions/repositories. Full-assembly scenarios using generated public gRPC clients
+belong to API only; duplicating their helper under an integration name does not establish an
+integration suite or its coverage threshold.
 
 Every change comes with its automated tests in the same PR — not in a follow-up. Three levels, each mandatory:
 
@@ -356,6 +363,8 @@ it. Check:
 - New dependencies: flag a new library that gets network, storage or data access, so the owner decides on it.
 
 ### Tests
+
+Check the independent suite boundaries in Tests; duplicated public RPC helpers do not count as integration coverage.
 
 The criterion is whether the use cases of the changed functionality are covered; the independent 80% statements
 gates in Tests are minimums, and meeting them does not settle this check. For

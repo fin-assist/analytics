@@ -107,6 +107,11 @@ func stateOf(s *analyticsv1.UserDataState) (domain.State, error) {
 		}
 		*f.to = t
 	}
+	var err error
+	out.Revisions, err = revisionsOf(s.GetDataRevisions())
+	if err != nil {
+		return domain.State{}, err
+	}
 	return out, nil
 }
 
@@ -124,6 +129,10 @@ func snapshotOf(p *analyticsv1.PeriodSnapshot) (domain.Snapshot, error) {
 		UnreadLines: p.GetUnreadLinesCount(),
 	}
 	var err error
+	s.Revisions, err = revisionsOf(p.GetDataRevisions())
+	if err != nil {
+		return domain.Snapshot{}, err
+	}
 	if s.Range, err = rangeOf(p.GetRange()); err != nil {
 		return domain.Snapshot{}, err
 	}
