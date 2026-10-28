@@ -136,13 +136,15 @@ CI сохраняет `.out`, `.jsonl`, `*.coverage.txt` и `*.report.txt` ка�
 
 Подробности классификации, текущих проверок и исторических дефицитов — [docs/testing.md](docs/testing.md).
 
-Модули `github.com/fin-assist/*` берутся из git, минуя прокси (`GOPRIVATE`, задан в `Makefile` и CI). Для приватного — токен с чтением репозиториев fin-assist: локально `git config --global url."https://x-access-token:<token>@github.com/fin-assist/".insteadOf "https://github.com/fin-assist/"`, в CI — секрет `GO_MODULES_TOKEN`, в `docker build` — секрет `netrc`.
+Модули `github.com/fin-assist/*` берутся из git, минуя прокси (`GOPRIVATE`, задан в `Makefile` и CI). Для приватного — токен с чтением репозиториев fin-assist: локально `git config --global url."https://x-access-token:<token>@github.com/fin-assist/".insteadOf "https://github.com/fin-assist/"`, в CI для доверенного push в `main` — секрет `GO_MODULES_TOKEN`, в локальном `docker build` — секрет `netrc`. В PR, включая PR из того же репозитория, этот CI-секрет не передаётся.
 
 ## Артефакты stage
 
 [Получение и проверка бинарей](docs/stage-artifacts.md) (FIN-148): CI извлекает бинарь из проверенного образа, сохраняет SHA и контрольную сумму; фактическая выкладка остаётся FIN-149.
 
 ## Общий Go CI и линтеры (FIN-372)
+
+В CI `GO_MODULES_TOKEN` передаётся только при доверенном push в `main`, включая сборку образа. Ни один PR, в том числе из того же репозитория, этот секрет не получает. Текущие модули fin-assist публичны. Одного добавления секрета недостаточно для проверки PR с приватными Go-модулями: доступ в PR этой конфигурацией не предоставляется.
 
 Общие команды и тесты скриптов требуют Python 3.11+ с PyYAML.
 
