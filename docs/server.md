@@ -14,7 +14,7 @@
 
 Обработчики FIN-283: `UpsertUserMetrics`, `ListPeriods` (`internal/adapter/grpc/metrics`) и `PurgeUserData` (`DeletionServer` библиотеки `go-tombstone`). `GetAnalytics` (FIN-5) реализован в той же смешанной модели, что `ListPeriods`: пользователь из проверенного `sub`, системный `assistant` указывает `user_id`. Поддерживаются точный/последний период, оба режима переводов, `supports`, `analytics_order:b` (категории перед плитками), серверные тексты всех MVP-блоков. Неизвестные эксперименты игнорируются; несовместимые примитивы пропускаются. Устаревшие поля ответа 5–9 не заполняются: BFF читает `blocks`. Клиентов соседей и фоновых заданий, кроме обновления ключей identity, нет. Health и dev reflection принадлежат инфраструктурной сборке.
 
-Обработчики остаются в `internal/adapter/grpc/<feature>/`, usecase — в `internal/<feature>/`. Данные контекста читаются через `github.com/fin-assist/go-grpc/reqctx`; локального `internal/reqctx` нет. Ошибки контракта создаются через `finerr`; внутренние bare status создаёт только библиотека `go-grpc/server`. Запрет обхода `finerr` в `.golangci.yml` сохраняется.
+Обработчики остаются в `internal/adapter/grpc/<feature>/`, usecase — в `internal/<feature>/`. Данные контекста читаются через `github.com/fin-assist/go-grpc/reqctx`; локального `internal/reqctx` нет. Ошибки контракта создаются через `finerr`; внутренние bare status создаёт только библиотека `go-grpc/server`. Запрет обхода `finerr` в `.finassist-ci/generated/.golangci.yml` сохраняется.
 
 ## Identity и удалённые пользователи
 
