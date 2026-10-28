@@ -31,7 +31,7 @@ golang-migrate отправляет файл целиком одним запр�
 
 Команда `migrate` ставит на соединение `lock_timeout` и `statement_timeout` и ограничивает ожидание параллельного запуска того же источника: переменные `MIGRATE_LOCK_TIMEOUT`, `MIGRATE_STATEMENT_TIMEOUT`, `MIGRATE_WAIT_TIMEOUT`, значения по умолчанию — в [config.md](config.md), «`migrate`» (таблица генерируется из кода).
 
-Долгая миграция (бэкфилл, индекс на большой таблице) поднимает таймаут у себя: `SET LOCAL statement_timeout = '2h';`. Повторять таймауты в каждом файле не нужно — поэтому правила squawk `require-lock-timeout` и `require-statement-timeout` выключены в `.squawk.toml`.
+Долгая миграция (бэкфилл, индекс на большой таблице) поднимает таймаут у себя: `SET LOCAL statement_timeout = '2h';`. Повторять таймауты в каждом файле не нужно — поэтому правила squawk `require-lock-timeout` и `require-statement-timeout` выключены в `.finassist-ci/generated/.squawk.toml`.
 
 Упал по `lock_timeout` — значит, таблицу держала долгая транзакция сервиса. Файл откатился целиком, его можно запустить снова (после `force`, см. ниже).
 
@@ -134,7 +134,7 @@ analytics migrate force <source> <version>  # выставить версию и
 ## Проверки в CI
 
 - `go test ./...` с PostgreSQL в Docker (testcontainers): для каждой миграции сервиса — «вверх → вниз → вверх» на чистой базе (`migrations/migrations_test.go`), плюс тесты самого запуска.
-- Squawk по **новым** up-файлам PR (`.squawk.toml`). Down-файлы проверяет «вверх → вниз → вверх».
+- Squawk по **новым** up-файлам PR (`.finassist-ci/generated/.squawk.toml`). Down-файлы проверяет «вверх → вниз → вверх».
 - Существующие файлы в `migrations/` не меняются.
 
 Локально без Docker — свой PostgreSQL:
