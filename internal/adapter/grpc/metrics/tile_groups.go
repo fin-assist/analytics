@@ -54,7 +54,7 @@ func (p composition) groupTiles(b *commonv1.Block) error {
 	daily["title"] = "Средние расходы в день"
 	if daily["status"] == "ready" || daily["status"] == "tentative" {
 		caption := "По дням с данными не позже сегодня; пропуски не учитываются"
-		if previous, ok := daily["caption"].(string); ok && strings.TrimSpace(previous) != "" {
+		if previous, ok := daily["caption"].(string); ok && strings.TrimSpace(previous) != "" && previous != caption {
 			caption += "\n" + previous
 		}
 		daily["caption"] = caption

@@ -74,7 +74,7 @@ func TestAPIAllTimeCapabilitiesAndSubjectRemainBoundToAuthenticatedUser(t *testi
 	if e != nil || len(list.Periods) != 1 || list.Periods[0].Key != "all_time" {
 		t.Fatalf("%v %v", list, e)
 	}
-	for _, bad := range []*analyticsv1.GetAnalyticsRequest{{Period: 5}, {Period: 4, PeriodKey: proto.String("2026-10")}, {Period: 1, PeriodKey: proto.String("all_time")}, {Period: 4, Supports: []*commonv1.BlockSupport{{Type: "tile_group", MaxVersion: 0}}}, {Period: 4, Supports: []*commonv1.BlockSupport{{Type: "future", MaxVersion: -1}}}} {
+	for _, bad := range []*analyticsv1.GetAnalyticsRequest{{Period: 99}, {Period: 4, PeriodKey: proto.String("2026-10")}, {Period: 1, PeriodKey: proto.String("all_time")}, {Period: 4, Supports: []*commonv1.BlockSupport{{Type: "tile_group", MaxVersion: 0}}}, {Period: 4, Supports: []*commonv1.BlockSupport{{Type: "future", MaxVersion: -1}}}} {
 		_, e := c.analytics.GetAnalytics(userCtx, bad)
 		r, ok := finerr.ToREST(e)
 		if !ok || status.Code(e) != codes.InvalidArgument || len(r.Violations) != 1 || r.Violations[0].Reason != "INVALID_FORMAT" {

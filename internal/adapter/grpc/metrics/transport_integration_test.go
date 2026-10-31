@@ -132,7 +132,7 @@ func batch(user string, version int32) *analyticsv1.UpsertUserMetricsRequest {
 	}
 	return &analyticsv1.UpsertUserMetricsRequest{
 		UserId: user, CalcVersion: version,
-		State: &analyticsv1.UserDataState{HasData: true, DataFrom: at(1), DataTo: at(21), LastOperationAt: at(20), StaleAfter: at(28),
+		State: &analyticsv1.UserDataState{HasData: true, DataFrom: at(1), DataTo: timestamppb.New(at(21).AsTime().Add(-3 * time.Hour)), LastOperationAt: at(20), StaleAfter: at(28),
 			FullMonths: 1, TimeZone: "Europe/Moscow", CalculatedAt: at(21)},
 		Periods:        []*analyticsv1.PeriodSnapshot{period(commonv1.TransferMode_TRANSFER_MODE_WITH), period(commonv1.TransferMode_TRANSFER_MODE_WITHOUT)},
 		RemovedPeriods: []*analyticsv1.PeriodRef{{Period: commonv1.PeriodType_PERIOD_TYPE_MONTH, PeriodKey: "2026-08"}},
@@ -173,6 +173,9 @@ func TestIntegrationUpsertUserMetricsRulesOverTransport(t *testing.T) {
 		"state time zone":      func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.TimeZone = "../UTC" },
 		"state without moment": func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.CalculatedAt = nil },
 		"state one bound":      func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.DataTo = nil },
+		"state non-day end": func(r *analyticsv1.UpsertUserMetricsRequest) {
+			r.State.DataTo = timestamppb.New(r.State.DataTo.AsTime().Add(time.Hour))
+		},
 		"state stale":          func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.StaleAfter = at(2) },
 		"state has data":       func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.LastOperationAt = nil },
 		"state full months":    func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.FullMonths = -1 },
@@ -267,7 +270,7 @@ func TestIntegrationListPeriodsOverTransport(t *testing.T) {
 	bareInvalid(t, err)
 	_, err = tr.analytics.ListPeriods(ctx, &analyticsv1.ListPeriodsRequest{UserId: proto.String("not-a-uuid")})
 	bareInvalid(t, err)
-	_, err = tr.analytics.ListPeriods(user, &analyticsv1.ListPeriodsRequest{Period: commonv1.PeriodType(5)})
+	_, err = tr.analytics.ListPeriods(user, &analyticsv1.ListPeriodsRequest{Period: commonv1.PeriodType(99)})
 	if server.Reason(err) != "VALIDATION_ERROR" {
 		t.Fatalf("unknown period type: %v", err)
 	}
@@ -276,5 +279,25 @@ func TestIntegrationListPeriodsOverTransport(t *testing.T) {
 	cancel()
 	if _, err := tr.analytics.ListPeriods(cancelled, &analyticsv1.ListPeriodsRequest{}); status.Code(err) != codes.Canceled {
 		t.Fatalf("cancelled call: %v", err)
+	}
+}
+
+func TestIntegrationLegacyNonCivilStateKeepsCalendarReads(t *testing.T) {
+	tr := startTransport(t)
+	if _, err := tr.ingest.UpsertUserMetrics(t.Context(), batch(alice, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tr.db.Primary().Exec(t.Context(), `UPDATE user_data_state SET data_to=data_to+interval '1 hour' WHERE user_id=$1`, alice); err != nil {
+		t.Fatal(err)
+	}
+	ctx := metadata.AppendToOutgoingContext(t.Context(), "test-user", alice)
+	for _, tc := range []struct {
+		typ commonv1.PeriodType
+		key string
+	}{{1, "2026-09"}, {2, "2026-Q3"}, {3, "2026"}, {4, "all_time"}} {
+		got, err := tr.analytics.GetAnalytics(ctx, &analyticsv1.GetAnalyticsRequest{Period: tc.typ, PeriodKey: proto.String(tc.key)})
+		if err != nil || !got.GetHasData() {
+			t.Fatalf("legacy state broke %s: %v %v", tc.key, got, err)
+		}
 	}
 }

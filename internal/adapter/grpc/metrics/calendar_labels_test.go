@@ -75,6 +75,17 @@ func calendarFixture(t *testing.T, key, oldZone, newZone string) domain.Analytic
 		})
 	}
 	shift(r.ProtoReflect())
+	// The new state has rebuilt profile-day bounds while the financial snapshot retains its old calendar.
+	profile, err := time.LoadLocation(newZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	civilEnd := r.State.DataTo.AsTime().In(old)
+	boundary, ok := domain.CivilDayStart(civilEnd.Year(), civilEnd.Month(), civilEnd.Day(), profile)
+	if !ok {
+		t.Fatal("fixture day absent")
+	}
+	r.State.DataTo = timestamppb.New(boundary)
 	r.State.TimeZone = newZone
 	r.State.Recalculating = true
 	u, err := upsertOf(r)

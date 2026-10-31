@@ -24,13 +24,15 @@ type PeriodType int32
 
 // Known period types; UNSPECIFIED (0) is never stored.
 const (
-	PeriodMonth   PeriodType = 1
-	PeriodQuarter PeriodType = 2
-	PeriodYear    PeriodType = 3
-	PeriodAllTime PeriodType = 4
+	PeriodMonth          PeriodType = 1
+	PeriodQuarter        PeriodType = 2
+	PeriodYear           PeriodType = 3
+	PeriodAllTime        PeriodType = 4
+	PeriodRollingYear    PeriodType = 5
+	PeriodRollingQuarter PeriodType = 6
 )
 
-// String is the bounded metric label of the type (grpc-api.md 9).
+// String is the bounded metric label of a known period.
 func (t PeriodType) String() string {
 	switch t {
 	case PeriodMonth:
@@ -41,13 +43,17 @@ func (t PeriodType) String() string {
 		return "year"
 	case PeriodAllTime:
 		return "all_time"
+	case PeriodRollingYear:
+		return "rolling_year"
+	case PeriodRollingQuarter:
+		return "rolling_quarter"
 	}
 	return "unknown"
 }
 
 // Known reports whether t is a type this release stores.
 func (t PeriodType) Known() bool {
-	return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear || t == PeriodAllTime
+	return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear || t == PeriodAllTime || t.Rolling()
 }
 
 // TransferMode is the number of finassist.common.v1.TransferMode.
@@ -92,10 +98,12 @@ type SnapshotKey struct {
 }
 
 var periodKeyGrammar = map[PeriodType]*regexp.Regexp{
-	PeriodMonth:   regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`),
-	PeriodQuarter: regexp.MustCompile(`^[0-9]{4}-Q[1-4]$`),
-	PeriodYear:    regexp.MustCompile(`^[0-9]{4}$`),
-	PeriodAllTime: regexp.MustCompile(`^all_time$`),
+	PeriodMonth:          regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`),
+	PeriodQuarter:        regexp.MustCompile(`^[0-9]{4}-Q[1-4]$`),
+	PeriodYear:           regexp.MustCompile(`^[0-9]{4}$`),
+	PeriodAllTime:        regexp.MustCompile(`^all_time$`),
+	PeriodRollingYear:    regexp.MustCompile(`^rolling_year$`),
+	PeriodRollingQuarter: regexp.MustCompile(`^rolling_quarter$`),
 }
 
 // Validate checks the type and the exact grammar of the key: on it rests the equality of
@@ -218,7 +226,7 @@ func (u Upsert) Validate() error {
 		return invalid("calc_version %d is not positive", u.Version)
 	}
 	if u.State != nil {
-		if err := u.State.Validate(); err != nil {
+		if err := u.State.ValidateIngest(); err != nil {
 			return err
 		}
 	}
@@ -392,6 +400,23 @@ func (s *State) Validate() error {
 		return invalid("state full_months %d", s.FullMonths)
 	}
 	return ValidateTimeZone(s.TimeZone)
+}
+
+// ValidateIngest applies current civil-day rules only to a newly received state.
+// Existing financial snapshots remain readable after legacy writes or tzdata changes.
+func (s *State) ValidateIngest() error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	if s.DataTo != nil {
+		zone, _ := time.LoadLocation(s.TimeZone)
+		local := s.DataTo.In(zone)
+		boundary, exists := CivilDayStart(local.Year(), local.Month(), local.Day(), zone)
+		if !exists || !boundary.Equal(*s.DataTo) {
+			return invalid("state data_to is not a covered-day boundary")
+		}
+	}
+	return nil
 }
 
 // ValidateTimeZone accepts an IANA zone name and nothing that merely loads: the empty

@@ -1,0 +1,1190 @@
+{
+  "user_id": "01a107db-ae80-7b07-b8a1-00000000a11c",
+  "calc_version": 4,
+  "state": {
+    "has_data": true,
+    "data_from": "2020-01-01T00:00:00+03:00",
+    "data_to": "2026-10-31T00:00:00+03:00",
+    "last_operation_at": "2026-10-04T12:00:00+03:00",
+    "stale_after": "2026-11-14T00:00:00+03:00",
+    "time_zone": "Europe/Moscow",
+    "calculated_at": "2026-10-31T12:00:00+03:00",
+    "full_months": 3,
+    "data_revisions": [
+      {
+        "code": "uploads",
+        "value": "1"
+      },
+      {
+        "code": "categories",
+        "value": "1"
+      },
+      {
+        "code": "time_zone",
+        "value": "1"
+      }
+    ]
+  },
+  "periods": [
+    {
+      "period": "PERIOD_TYPE_ROLLING_QUARTER",
+      "period_key": "rolling_quarter",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-07-31T00:00:00+03:00",
+        "end": "2026-10-31T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2026-07-31T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-09-01T00:00:00+03:00",
+            "end": "2026-10-01T00:00:00+03:00"
+          }
+        ]
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "250",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            },
+            "filters": {
+              "from": "2026-07-31T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": "KIND_FILTER_EXPENSE",
+              "transfer_mode": "TRANSFER_MODE_WITH"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "500",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "250",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "3",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.typical",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2026-07",
+                  "range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-07-31T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2026-07-31T00:00:00+03:00",
+                    "data_to": "2026-07-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_NO_DATA"
+                  }
+                },
+                {
+                  "month": "2026-10",
+                  "range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-11-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-10-31T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2026-10-01T00:00:00+03:00",
+                    "data_to": "2026-10-30T23:59:59+03:00"
+                  },
+                  "expense_minor": "250",
+                  "income_minor": "500"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "data_revisions": [
+        {
+          "code": "uploads",
+          "value": "1"
+        },
+        {
+          "code": "categories",
+          "value": "1"
+        },
+        {
+          "code": "time_zone",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_ROLLING_QUARTER",
+      "period_key": "rolling_quarter",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-07-31T00:00:00+03:00",
+        "end": "2026-10-31T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2026-07-31T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-09-01T00:00:00+03:00",
+            "end": "2026-10-01T00:00:00+03:00"
+          }
+        ]
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "200",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            },
+            "filters": {
+              "from": "2026-07-31T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": "KIND_FILTER_EXPENSE",
+              "transfer_mode": "TRANSFER_MODE_WITHOUT"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "500",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "300",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "3",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.typical",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2026-07-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2026-07",
+                  "range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-07-31T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2026-07-31T00:00:00+03:00",
+                    "data_to": "2026-07-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_NO_DATA"
+                  }
+                },
+                {
+                  "month": "2026-10",
+                  "range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-11-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-10-31T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2026-10-01T00:00:00+03:00",
+                    "data_to": "2026-10-30T23:59:59+03:00"
+                  },
+                  "expense_minor": "200",
+                  "income_minor": "500"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "data_revisions": [
+        {
+          "code": "uploads",
+          "value": "1"
+        },
+        {
+          "code": "categories",
+          "value": "1"
+        },
+        {
+          "code": "time_zone",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_ROLLING_YEAR",
+      "period_key": "rolling_year",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2025-10-31T00:00:00+03:00",
+        "end": "2026-10-31T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2025-10-31T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-09-01T00:00:00+03:00",
+            "end": "2026-10-01T00:00:00+03:00"
+          }
+        ]
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "250",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            },
+            "filters": {
+              "from": "2025-10-31T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": "KIND_FILTER_EXPENSE",
+              "transfer_mode": "TRANSFER_MODE_WITH"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "500",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "250",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "3",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.typical",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2025-10",
+                  "range": {
+                    "start": "2025-10-01T00:00:00+03:00",
+                    "end": "2025-11-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2025-10-31T00:00:00+03:00",
+                    "end": "2025-11-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2025-10-31T00:00:00+03:00",
+                    "data_to": "2025-10-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2025-11",
+                  "range": {
+                    "start": "2025-11-01T00:00:00+03:00",
+                    "end": "2025-12-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2025-11-01T00:00:00+03:00",
+                    "end": "2025-12-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2025-12",
+                  "range": {
+                    "start": "2025-12-01T00:00:00+03:00",
+                    "end": "2026-01-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2025-12-01T00:00:00+03:00",
+                    "end": "2026-01-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-01",
+                  "range": {
+                    "start": "2026-01-01T00:00:00+03:00",
+                    "end": "2026-02-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-01-01T00:00:00+03:00",
+                    "end": "2026-02-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-02",
+                  "range": {
+                    "start": "2026-02-01T00:00:00+03:00",
+                    "end": "2026-03-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-02-01T00:00:00+03:00",
+                    "end": "2026-03-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-03",
+                  "range": {
+                    "start": "2026-03-01T00:00:00+03:00",
+                    "end": "2026-04-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-03-01T00:00:00+03:00",
+                    "end": "2026-04-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-04",
+                  "range": {
+                    "start": "2026-04-01T00:00:00+03:00",
+                    "end": "2026-05-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-04-01T00:00:00+03:00",
+                    "end": "2026-05-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-05",
+                  "range": {
+                    "start": "2026-05-01T00:00:00+03:00",
+                    "end": "2026-06-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-05-01T00:00:00+03:00",
+                    "end": "2026-06-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-06",
+                  "range": {
+                    "start": "2026-06-01T00:00:00+03:00",
+                    "end": "2026-07-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-06-01T00:00:00+03:00",
+                    "end": "2026-07-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-07",
+                  "range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_NO_DATA"
+                  }
+                },
+                {
+                  "month": "2026-10",
+                  "range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-11-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-10-31T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2026-10-01T00:00:00+03:00",
+                    "data_to": "2026-10-30T23:59:59+03:00"
+                  },
+                  "expense_minor": "250",
+                  "income_minor": "500"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "data_revisions": [
+        {
+          "code": "uploads",
+          "value": "1"
+        },
+        {
+          "code": "categories",
+          "value": "1"
+        },
+        {
+          "code": "time_zone",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_ROLLING_YEAR",
+      "period_key": "rolling_year",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2025-10-31T00:00:00+03:00",
+        "end": "2026-10-31T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2025-10-31T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-09-01T00:00:00+03:00",
+            "end": "2026-10-01T00:00:00+03:00"
+          }
+        ]
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "200",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            },
+            "filters": {
+              "from": "2025-10-31T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": "KIND_FILTER_EXPENSE",
+              "transfer_mode": "TRANSFER_MODE_WITHOUT"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "500",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "300",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "3",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.expense.typical",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense.comparison",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "999999",
+            "range": {
+              "start": "2025-10-31T00:00:00+03:00",
+              "end": "2026-10-31T00:00:00+03:00"
+            }
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_NONE"
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2025-10",
+                  "range": {
+                    "start": "2025-10-01T00:00:00+03:00",
+                    "end": "2025-11-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2025-10-31T00:00:00+03:00",
+                    "end": "2025-11-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2025-10-31T00:00:00+03:00",
+                    "data_to": "2025-10-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2025-11",
+                  "range": {
+                    "start": "2025-11-01T00:00:00+03:00",
+                    "end": "2025-12-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2025-11-01T00:00:00+03:00",
+                    "end": "2025-12-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2025-12",
+                  "range": {
+                    "start": "2025-12-01T00:00:00+03:00",
+                    "end": "2026-01-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2025-12-01T00:00:00+03:00",
+                    "end": "2026-01-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-01",
+                  "range": {
+                    "start": "2026-01-01T00:00:00+03:00",
+                    "end": "2026-02-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-01-01T00:00:00+03:00",
+                    "end": "2026-02-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-02",
+                  "range": {
+                    "start": "2026-02-01T00:00:00+03:00",
+                    "end": "2026-03-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-02-01T00:00:00+03:00",
+                    "end": "2026-03-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-03",
+                  "range": {
+                    "start": "2026-03-01T00:00:00+03:00",
+                    "end": "2026-04-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-03-01T00:00:00+03:00",
+                    "end": "2026-04-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-04",
+                  "range": {
+                    "start": "2026-04-01T00:00:00+03:00",
+                    "end": "2026-05-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-04-01T00:00:00+03:00",
+                    "end": "2026-05-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-05",
+                  "range": {
+                    "start": "2026-05-01T00:00:00+03:00",
+                    "end": "2026-06-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-05-01T00:00:00+03:00",
+                    "end": "2026-06-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-06",
+                  "range": {
+                    "start": "2026-06-01T00:00:00+03:00",
+                    "end": "2026-07-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-06-01T00:00:00+03:00",
+                    "end": "2026-07-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-07",
+                  "range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_COMPLETE"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_NO_DATA"
+                  }
+                },
+                {
+                  "month": "2026-10",
+                  "range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-11-01T00:00:00+03:00"
+                  },
+                  "calculation_range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-10-31T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": "COVERAGE_PARTIAL",
+                    "data_from": "2026-10-01T00:00:00+03:00",
+                    "data_to": "2026-10-30T23:59:59+03:00"
+                  },
+                  "expense_minor": "200",
+                  "income_minor": "500"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "data_revisions": [
+        {
+          "code": "uploads",
+          "value": "1"
+        },
+        {
+          "code": "categories",
+          "value": "1"
+        },
+        {
+          "code": "time_zone",
+          "value": "1"
+        }
+      ]
+    }
+  ]
+}

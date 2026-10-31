@@ -73,3 +73,24 @@ zero/negative/safe-max/locked, ранний и stale режимы, empty groups 
 выбор версии и действия covered/zero/gap. Обычный текущий месяц с прогнозом и пустой календарный период
 проверены на integration/API уровнях отдельно от all_time. Общие тесты транзакционной конкурентности,
 отказа БД и per-block timeout продолжают действовать: схема/SQL/wiring/политика доступа не менялись.
+
+FIN-411 после объединения PR51: `TestAPICombinedCalendarAllTimeAndRollingKeepTheirRangesAndFacts`
+пишет календарные, all_time и rolling снимки одного пользователя в один PostgreSQL и читает оба режима с
+`tile_group@1/@2`. Проверяются точные singleton-ключи, чужие ключи, диапазоны/навигация, неизменность финансовых
+значений, статусов, locks и действий при переключении групп. `TestUnitPeriodSelectionsKeepCalendarAndSingletonSemantics`
+проверяет все шесть типов через общий интерфейс стратегий. All-time state fallback/retained-range регрессии
+предшествующего PR сохранены; assistant chips запрещает BFF, RPC-чтение assistant остаётся разрешённым по контракту.
+
+FIN-411 review regressions: WITHOUT-only complete проверен `TestIntegrationRollingListUsesAvailableWithoutHeader`
+и `TestAPIRollingListMatchesDeliveredWithoutCoverage` (первоначально оба воспроизводили partial вместо complete).
+Integration дополнительно проверяет WITHOUT-first при двух заголовках и WITH fallback при удалённом WITHOUT.
+`TestIntegrationRollingListCertifiesOnlyCurrentHeaderRevisions` и API проверяют coverage/revisions согласованного
+снимка, нового state перед старым снимком и отсутствующего снимка. Unit проверяет query/scan/iteration failures
+и повреждённую provenance. `TestAPIInvalidStateDayEndIsRejectedAtomically` доказывает отказ всего ingest без
+изменения прежнего ответа; unit и прежний midnight-gap API подтверждают первый реальный civil-момент в 01:00.
+
+Повторное ревью FIN-411: `TestAPILegacyNonCivilStateKeepsCalendarAndAllTimeReads` и
+`TestIntegrationLegacyNonCivilStateKeepsCalendarReads` напрямую меняют сохранённый `data_to` на +1 час:
+calendar/all_time остаются читаемыми, ingest-only gate и rolling guard проверяются отдельно.
+`TestAPIRollingListSkipsStaleWithoutForCurrentWith`, одноимённый PostgreSQL integration и domain/row unit
+проверяют старый WITHOUT + новый WITH, точное пересечение ревизий и fallback partial/state при двух старых.

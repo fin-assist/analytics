@@ -27,7 +27,7 @@ func (p composition) preciseAllTimeDays() bool {
 
 func (p composition) chartMonthName(key string, names [12]string) string {
 	name := monthName(key, names)
-	if p.s.Key.Type == domain.PeriodAllTime && (domain.PeriodKey{Type: domain.PeriodMonth, Key: key}).Validate() == nil {
+	if (p.s.Key.Type == domain.PeriodAllTime || p.s.Key.Type.Rolling()) && (domain.PeriodKey{Type: domain.PeriodMonth, Key: key}).Validate() == nil {
 		name += " " + key[:4]
 	}
 	return name

@@ -246,7 +246,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		{false, 2, "сентябрь 2026 нет · неполные данные · сохранённый расчёт"},
 		{false, 1, "сентябрь 2026 нет · сохранённый расчёт"},
 	} {
-		req.State.TimeZone = "UTC"
+		setFixtureStateZone(t, req.State, "UTC")
 		req.State.Recalculating = tc.recalculating
 		for _, snap := range req.Periods {
 			snap.Bounds.Coverage = tc.coverage
@@ -328,7 +328,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	}
 	req = analyticsFixture(t)
 	req.CalcVersion = 245
-	req.State.TimeZone = "UTC"
+	setFixtureStateZone(t, req.State, "UTC")
 	req.State.Recalculating = true
 	write()
 	rebuilt := read(&analyticsv1.GetAnalyticsRequest{})
@@ -343,7 +343,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Fatal(e)
 	}
 	req.CalcVersion = 247
-	req.State.TimeZone = "Europe/Moscow"
+	setFixtureStateZone(t, req.State, "Europe/Moscow")
 	req.State.Recalculating = true
 	write()
 	rebuilt = read(&analyticsv1.GetAnalyticsRequest{})
@@ -428,10 +428,10 @@ func retainedDSTScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceC
 			}
 			req := analyticsFixture(t)
 			req.CalcVersion = int32(300 + i)
-			req.State.TimeZone = "UTC"
+			setFixtureStateZone(t, req.State, "UTC")
 			req.State.Recalculating = true
-			req.State.DataFrom = parse(tc.start)
-			req.State.DataTo = parse(tc.end)
+			req.State.DataFrom = parse(tc.start[:10] + "T00:00:00Z")
+			req.State.DataTo = parse(tc.end[:10] + "T00:00:00Z")
 			req.State.LastOperationAt = parse(tc.to)
 			req.State.CalculatedAt = parse(tc.to)
 			req.State.StaleAfter = timestamppb.New(parse(tc.end).AsTime().AddDate(1, 0, 0))
@@ -516,4 +516,22 @@ func retainedDSTScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceC
 			}
 		})
 	}
+}
+
+// Rebuild the state civil boundary in the profile zone; stored financial snapshots remain untouched.
+func setFixtureStateZone(t *testing.T, state *analyticsv1.UserDataState, name string) {
+	t.Helper()
+	old, err := time.LoadLocation(state.TimeZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zone, err := time.LoadLocation(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.DataTo != nil {
+		civil := state.DataTo.AsTime().In(old)
+		state.DataTo = timestamppb.New(time.Date(civil.Year(), civil.Month(), civil.Day(), 0, 0, 0, 0, zone))
+	}
+	state.TimeZone = name
 }

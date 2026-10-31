@@ -14,7 +14,7 @@ import (
 // periodCalendarBounds describes the civil period named by a key. It is used only
 // to check metadata and label a period; stored financial bounds are never replaced.
 func periodCalendarBounds(key domain.PeriodKey, zone *time.Location) (time.Time, time.Time, bool) {
-	if zone == nil || key.Type == domain.PeriodAllTime || key.Validate() != nil {
+	if zone == nil || key.Type == domain.PeriodAllTime || key.Type.Rolling() || key.Validate() != nil {
 		return time.Time{}, time.Time{}, false
 	}
 	year, _ := strconv.Atoi(key.Key[:4])
@@ -47,7 +47,14 @@ func (p composition) preciseDays() bool {
 	if p.s.Key.Type == domain.PeriodAllTime {
 		return p.preciseAllTimeDays()
 	}
-	return p.s.State != nil && !p.s.State.Recalculating && profileCalendarMatches(p.s.Key.PeriodKey, &p.s.Range, p.zone)
+	if p.s.State == nil || p.s.State.Recalculating {
+		return false
+	}
+	if p.s.Key.Type.Rolling() {
+		expected, err := domain.RollingRange(p.s.Key.Type, p.s.State.DataTo, p.zone)
+		return err == nil && expected.Start.Equal(*p.s.Range.Start) && expected.End.Equal(*p.s.Range.End)
+	}
+	return profileCalendarMatches(p.s.Key.PeriodKey, &p.s.Range, p.zone)
 }
 
 func (p composition) precisePointDays(point *analyticsv1.MonthlyPoint) bool {
@@ -56,12 +63,21 @@ func (p composition) precisePointDays(point *analyticsv1.MonthlyPoint) bool {
 		return false
 	}
 	start, end := r.Start.AsTime(), r.End.AsTime()
+	if p.s.Key.Type.Rolling() {
+		return rollingMonthMatches(point.Month, start, end, p.zone)
+	}
 	return profileCalendarMatches(domain.PeriodKey{Type: domain.PeriodMonth, Key: point.GetMonth()}, &domain.TimeRange{Start: &start, End: &end}, p.zone)
 }
 
 func periodName(key domain.PeriodKey) string {
 	if key.Type == domain.PeriodAllTime {
 		return "всё время"
+	}
+	if key.Type == domain.PeriodRollingYear {
+		return "последние 12 месяцев"
+	}
+	if key.Type == domain.PeriodRollingQuarter {
+		return "последние 3 месяца"
 	}
 	start, _, ok := periodCalendarBounds(key, time.UTC)
 	if !ok {

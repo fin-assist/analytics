@@ -46,6 +46,12 @@ func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, err
 			value = point.GetExpenseMinor()
 		}
 		bar := p.barPoint(point, value)
+		if p.s.Key.Type.Rolling() {
+			if err := rollingPoint(point, p.s.Range, p.zone); err != nil {
+				return nil, err
+			}
+			bar["range"] = rangeJSON(point.CalculationRange, p.zone)
+		}
 		if action := monthSelection(point); action != nil {
 			bar["action"] = map[string]any{"type": action.Type, "period": "month", "date": action.GetPeriodKey()}
 		}
@@ -57,7 +63,7 @@ func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, err
 		alt = append(alt, p.chartMonthName(point.Month, monthNom)+" "+v)
 	}
 	d := map[string]any{"kind": "bar", "value_kind": "amount", "points": points, "notes": p.chartNotes(chart.Points)}
-	if p.s.Key.Type != domain.PeriodYear && p.s.Key.Type != domain.PeriodAllTime && len(points) > 0 {
+	if p.s.Key.Type != domain.PeriodYear && p.s.Key.Type != domain.PeriodAllTime && !p.s.Key.Type.Rolling() && len(points) > 0 {
 		d["highlight_index"] = len(points) - 1
 	}
 	b.AltText = ptr(title(id) + ": " + strings.Join(alt, ", "))
@@ -144,6 +150,9 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 		if peak != nil {
 			notes = append(notes, map[string]any{"text": "Больше всего — в " + p.chartMonthName(peak.Month, monthPrep) + ": " + money(peak.GetExpenseMinor()), "tone": "primary"})
 		}
+	}
+	if p.s.Key.Type.Rolling() {
+		return notes
 	}
 	if p.s.Key.Type == domain.PeriodYear {
 		parts := []string{}

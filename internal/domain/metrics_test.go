@@ -35,7 +35,7 @@ func validSnapshot(typ PeriodType, key string, mode TransferMode) Snapshot {
 func validState() *State {
 	return &State{
 		HasData: true, DataFrom: at(2026, 9, 1), DataTo: at(2026, 9, 26), LastOperationAt: at(2026, 9, 25),
-		StaleAfter: at(2026, 10, 10), FullMonths: 1, TimeZone: "Europe/Moscow", CalculatedAt: at(2026, 9, 26),
+		StaleAfter: at(2026, 10, 10), FullMonths: 1, TimeZone: "UTC", CalculatedAt: at(2026, 9, 26),
 	}
 }
 
@@ -93,7 +93,7 @@ func TestUnitUpsertRefusesEveryBrokenRule(t *testing.T) {
 		"calc_version zero":        func(u *Upsert) { u.Version = 0 },
 		"calc_version negative":    func(u *Upsert) { u.Version = -1 },
 		"period type unspecified":  func(u *Upsert) { first(u).Key.Type = 0 },
-		"period type unknown":      func(u *Upsert) { first(u).Key.Type = 5 },
+		"period type unknown":      func(u *Upsert) { first(u).Key.Type = 99 },
 		"transfer mode unset":      func(u *Upsert) { first(u).Key.Mode = 0 },
 		"transfer mode unknown":    func(u *Upsert) { first(u).Key.Mode = 3 },
 		"month 2026-9":             func(u *Upsert) { first(u).Key.Key = "2026-9" },
