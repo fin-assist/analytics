@@ -152,23 +152,25 @@ func TestUnitForecastHistoryWaitsForDailyAtProfileMonthBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rollover := false
 	read := func() *domain.ForecastHistory {
 		t.Helper()
 		got, err := uc.Get(t.Context(), user, domain.PeriodYear, &key, domain.TransferWith)
 		if err != nil {
 			t.Fatal(err)
 		}
+		rollover = got.Rollover
 		return got.History
 	}
-	if read() != history {
+	if read() != history || rollover {
 		t.Fatal("UTC next day suppressed the still-current profile month")
 	}
 	now = to.UTC()
-	if read() != nil {
+	if read() != nil || !rollover {
 		t.Fatal("previous month calculation explained today's month as unfinished")
 	}
 	store.data.State.CalculatedAt = &now
-	if read() != history {
+	if read() != history || rollover {
 		t.Fatal("daily completion did not restore the detail")
 	}
 }

@@ -529,6 +529,15 @@ func TestUnitGlobalEarlyChartCompositionMatchesKnownAndLegacyInventoryForAllPeri
 				if byID(got, "monthly_chart") != nil {
 					t.Fatalf("global early depends on metadata for %s", period.key)
 				}
+				s.Rollover = true
+				got, err = composerForTest(t).Compose(t.Context(), s, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if chart := byID(got, "monthly_chart"); chart == nil || chart.Status != "locked" {
+					t.Fatal("yesterday's full-month count hid today's chart", chart)
+				}
+				s.Rollover = false
 				if !known {
 					s.State.FullMonths = 1
 					got, err = composerForTest(t).Compose(t.Context(), s, nil, nil)

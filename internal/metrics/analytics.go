@@ -86,7 +86,8 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 	now := s.now()
 	calculated := data.State.CalculatedAt.In(zone)
 	current := now.In(zone)
-	if calculated.Year() != current.Year() || calculated.Month() != current.Month() {
+	out.Rollover = calculated.Year() != current.Year() || calculated.Month() != current.Month()
+	if out.Rollover {
 		// A previous month's completion count cannot explain today's calendar until daily delivery finishes.
 		out.History = nil
 	}

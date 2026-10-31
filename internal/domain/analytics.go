@@ -18,6 +18,8 @@ type Analytics struct {
 	Key            SnapshotKey
 	Range          TimeRange
 	Current, Stale bool
+	// Rollover means state counts were calculated in another profile calendar month.
+	Rollover bool
 }
 
 // ForecastHistory is the proven inventory of monthly coverage, read with the selected screen.

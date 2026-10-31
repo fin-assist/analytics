@@ -282,6 +282,9 @@ func safeNumbers(v any) error {
 }
 
 func (p composition) early() bool {
+	if p.s.Rollover {
+		return false
+	}
 	if history := p.s.History; history != nil {
 		return len(history.Months) == 1 && history.Months[0].Coverage == domain.CoveragePartial
 	}

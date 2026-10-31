@@ -266,6 +266,9 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	}
 	req = analyticsFixture(t)
 	req.CalcVersion = 210
+	// One incomplete covered month has no full months (calc.md section 4).
+	req.State.FullMonths = 0
+	req.State.DataFrom = req.Periods[0].Bounds.DataFrom
 	for _, s := range req.Periods {
 		for _, m := range s.Metrics {
 			if m.MetricId == "monthly_chart" {
