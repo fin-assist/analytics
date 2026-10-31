@@ -13,8 +13,6 @@ import (
 
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
 	commonv1 "github.com/fin-assist/contracts/gen/go/finassist/common/v1"
-	"github.com/fin-assist/contracts/gen/go/finerr"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -107,7 +105,7 @@ func (h *analytics) ListPeriods(ctx context.Context, req *analyticsv1.ListPeriod
 		typ = domain.PeriodMonth
 	}
 	if !typ.Known() {
-		return nil, finerr.ValidationError(&errdetails.BadRequest_FieldViolation{Field: "period", Description: "unknown period type"})
+		return nil, validation("period")
 	}
 	periods, err := h.uc.Periods(ctx, userID, typ)
 	if errors.Is(err, domain.ErrInvalid) {

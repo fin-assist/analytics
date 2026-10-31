@@ -445,3 +445,5 @@ Shared lint and script tests require Python 3.11+ with PyYAML.
 
 
 If a pinned revision changes common/bootstrap.py, synchronize its exact scripts/common_ci.py copy in the same PR; Renovate updates SHA references only. Rollback restores both pins and the matching bootstrap bytes. Byte equality keeps an incomplete update red; a manual copy update is not a bot-only FIN-211 update.
+
+FIN-391: GetAnalytics and ListPeriods use the canonical validation helper in grpc/metrics/analytics.go; BadRequest violations require a non-empty INVALID_FORMAT reason for finerr.ToREST. Incompatible coarse keys remain invalid; client navigation selects its own exact key.
