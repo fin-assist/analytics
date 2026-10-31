@@ -1,0 +1,946 @@
+{
+  "user_id": "01a107db-ae80-7b07-b8a1-00000000a11c",
+  "calc_version": 4,
+  "state": {
+    "has_data": true,
+    "data_from": "2025-10-30T00:00:00+03:00",
+    "data_to": "2026-10-31T00:00:00+03:00",
+    "last_operation_at": "2026-08-15T12:00:00+03:00",
+    "stale_after": "2026-11-14T00:00:00+03:00",
+    "full_months": 11,
+    "time_zone": "Europe/Moscow",
+    "calculated_at": "2026-10-31T12:00:00+03:00",
+    "data_revisions": [
+      {
+        "code": "categories",
+        "value": 0
+      },
+      {
+        "code": "uploads",
+        "value": 2
+      },
+      {
+        "code": "time_zone",
+        "value": 0
+      }
+    ]
+  },
+  "periods": [
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2025-10",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2025-10-01T00:00:00+03:00",
+        "end": "2025-11-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2025-10-30T00:00:00+03:00",
+        "data_to": "2025-10-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2025-10",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2025-10-01T00:00:00+03:00",
+        "end": "2025-11-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2025-10-30T00:00:00+03:00",
+        "data_to": "2025-10-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2025-11",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2025-11-01T00:00:00+03:00",
+        "end": "2025-12-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2025-11-01T00:00:00+03:00",
+        "data_to": "2025-11-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2025-11",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2025-11-01T00:00:00+03:00",
+        "end": "2025-12-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2025-11-01T00:00:00+03:00",
+        "data_to": "2025-11-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2025-12",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2025-12-01T00:00:00+03:00",
+        "end": "2026-01-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2025-12-01T00:00:00+03:00",
+        "data_to": "2025-12-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2025-12",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2025-12-01T00:00:00+03:00",
+        "end": "2026-01-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2025-12-01T00:00:00+03:00",
+        "data_to": "2025-12-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-01",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-01-01T00:00:00+03:00",
+        "end": "2026-02-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-01-01T00:00:00+03:00",
+        "data_to": "2026-01-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-01",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-01-01T00:00:00+03:00",
+        "end": "2026-02-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-01-01T00:00:00+03:00",
+        "data_to": "2026-01-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-02",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-02-01T00:00:00+03:00",
+        "end": "2026-03-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-02-01T00:00:00+03:00",
+        "data_to": "2026-02-28T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-02",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-02-01T00:00:00+03:00",
+        "end": "2026-03-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-02-01T00:00:00+03:00",
+        "data_to": "2026-02-28T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-03",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-03-01T00:00:00+03:00",
+        "end": "2026-04-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-03-01T00:00:00+03:00",
+        "data_to": "2026-03-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-03",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-03-01T00:00:00+03:00",
+        "end": "2026-04-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-03-01T00:00:00+03:00",
+        "data_to": "2026-03-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-04",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-04-01T00:00:00+03:00",
+        "end": "2026-05-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-04-01T00:00:00+03:00",
+        "data_to": "2026-04-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-04",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-04-01T00:00:00+03:00",
+        "end": "2026-05-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-04-01T00:00:00+03:00",
+        "data_to": "2026-04-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-05",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-05-01T00:00:00+03:00",
+        "end": "2026-06-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-05-01T00:00:00+03:00",
+        "data_to": "2026-05-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-05",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-05-01T00:00:00+03:00",
+        "end": "2026-06-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-05-01T00:00:00+03:00",
+        "data_to": "2026-05-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-06",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-06-01T00:00:00+03:00",
+        "end": "2026-07-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-06-01T00:00:00+03:00",
+        "data_to": "2026-06-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-06",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-06-01T00:00:00+03:00",
+        "end": "2026-07-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-06-01T00:00:00+03:00",
+        "data_to": "2026-06-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-07",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-07-01T00:00:00+03:00",
+        "end": "2026-08-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-07-01T00:00:00+03:00",
+        "data_to": "2026-07-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-07",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-07-01T00:00:00+03:00",
+        "end": "2026-08-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-07-01T00:00:00+03:00",
+        "data_to": "2026-07-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-08",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-08-01T00:00:00+03:00",
+        "end": "2026-09-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-08-01T00:00:00+03:00",
+        "data_to": "2026-08-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-08",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-08-01T00:00:00+03:00",
+        "end": "2026-09-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-08-01T00:00:00+03:00",
+        "data_to": "2026-08-31T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-09",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-09-01T00:00:00+03:00",
+        "end": "2026-10-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-09-01T00:00:00+03:00",
+        "data_to": "2026-09-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-09",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-09-01T00:00:00+03:00",
+        "end": "2026-10-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_COMPLETE",
+        "data_from": "2026-09-01T00:00:00+03:00",
+        "data_to": "2026-09-30T23:59:59+03:00"
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-10",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-10-01T00:00:00+03:00",
+        "end": "2026-11-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2026-10-01T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-10-10T00:00:00+03:00",
+            "end": "2026-10-13T00:00:00+03:00"
+          }
+        ]
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_MONTH",
+      "period_key": "2026-10",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-10-01T00:00:00+03:00",
+        "end": "2026-11-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2026-10-01T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-10-10T00:00:00+03:00",
+            "end": "2026-10-13T00:00:00+03:00"
+          }
+        ]
+      },
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_YEAR",
+      "period_key": "2026",
+      "transfer_mode": "TRANSFER_MODE_WITH",
+      "range": {
+        "start": "2026-01-01T00:00:00+03:00",
+        "end": "2027-01-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2026-01-01T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00"
+      },
+      "metrics": [
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "0"
+          }
+        },
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "100000"
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "100"
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "100000"
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_LOCKED",
+            "lock": {
+              "reason": "LOCK_REASON_NEED_FULL_MONTHS",
+              "required": 12,
+              "available": 11
+            }
+          }
+        }
+      ],
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "period": "PERIOD_TYPE_YEAR",
+      "period_key": "2026",
+      "transfer_mode": "TRANSFER_MODE_WITHOUT",
+      "range": {
+        "start": "2026-01-01T00:00:00+03:00",
+        "end": "2027-01-01T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": "COVERAGE_PARTIAL",
+        "data_from": "2026-01-01T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00"
+      },
+      "metrics": [
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "0"
+          }
+        },
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "100000"
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "100"
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_READY",
+            "value_minor": "100000"
+          }
+        },
+        {
+          "metric_id": "tiles.forecast",
+          "definition_version": 1,
+          "metric": {
+            "status": "METRIC_STATUS_LOCKED",
+            "lock": {
+              "reason": "LOCK_REASON_NEED_FULL_MONTHS",
+              "required": 12,
+              "available": 11
+            }
+          }
+        }
+      ],
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "categories",
+          "value": 0
+        },
+        {
+          "code": "uploads",
+          "value": 2
+        },
+        {
+          "code": "time_zone",
+          "value": 0
+        }
+      ]
+    }
+  ]
+}

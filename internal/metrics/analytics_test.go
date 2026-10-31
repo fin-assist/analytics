@@ -137,3 +137,54 @@ func TestUnitScreenDefaultAndOldSnapshotRange(t *testing.T) {
 }
 
 func ptrString(s string) *string { return &s }
+
+func TestUnitForecastHistoryWaitsForDailyAtProfileMonthBoundary(t *testing.T) {
+	zone, _ := time.LoadLocation("Europe/Moscow")
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, zone)
+	to := from.AddDate(0, 1, 0)
+	stale := to.AddDate(0, 0, 14)
+	calculated := to.Add(-time.Hour)
+	key := "2026"
+	history := &domain.ForecastHistory{}
+	store := &screenStore{data: domain.AnalyticsData{History: history, State: &domain.State{HasData: true, DataFrom: &from, DataTo: &to, LastOperationAt: &calculated, StaleAfter: &stale, TimeZone: zone.String(), CalculatedAt: &calculated}}}
+	now := to.Add(-time.Second).UTC()
+	uc, err := NewScreen(store, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func() *domain.ForecastHistory {
+		t.Helper()
+		got, err := uc.Get(t.Context(), user, domain.PeriodYear, &key, domain.TransferWith)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.History
+	}
+	if read() != history {
+		t.Fatal("UTC next day suppressed the still-current profile month")
+	}
+	now = to.UTC()
+	if read() != nil {
+		t.Fatal("previous month calculation explained today's month as unfinished")
+	}
+	store.data.State.CalculatedAt = &now
+	if read() != history {
+		t.Fatal("daily completion did not restore the detail")
+	}
+}
+
+func TestUnitExplicitNoDataPeriodHasNoNavigationNeighbours(t *testing.T) {
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	to := from.AddDate(0, 1, 0)
+	stale := to.AddDate(0, 0, 14)
+	store := &screenStore{data: domain.AnalyticsData{Previous: ptrString("2026-08"), Next: ptrString("2026-10"), State: &domain.State{HasData: true, DataFrom: &from, DataTo: &to, LastOperationAt: &from, StaleAfter: &stale, TimeZone: "UTC", CalculatedAt: &from}}}
+	uc, err := NewScreen(store, func() time.Time { return from })
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "2026-09"
+	got, err := uc.Get(t.Context(), user, domain.PeriodMonth, &key, domain.TransferWith)
+	if err != nil || got.Previous != nil || got.Next != nil {
+		t.Fatalf("no-data neighbours %+v %v", got, err)
+	}
+}

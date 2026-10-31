@@ -55,7 +55,7 @@ updates them in the same PR. A service made from the template rewrites the first
 | Validated batch of UpsertUserMetrics: domain types and every rule of «Инварианты в коде сервиса» | `internal/domain/metrics.go` |
 | Identity assembly (go-identity `NewAssembly`) and tombstone admission | `internal/app/identity.go`, `internal/app/app.go`; settings — `internal/config/identity.go` |
 | gRPC server, interceptors, access table types, identity and tombstone interfaces | `github.com/fin-assist/go-grpc/server`; rules — `docs/server.md` |
-| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/`; UpsertUserMetrics/ListPeriods/GetAnalytics — `internal/adapter/grpc/metrics/` (proto ↔ domain conversion); screen selection — `internal/metrics/analytics.go`; presentation and per-block deadlines — `composer.go`, `charts.go`, `insights.go`, `presentation.go`, `calendar_labels.go` |
+| gRPC handlers (messages ↔ usecases) | `internal/adapter/grpc/<feature>/`; UpsertUserMetrics/ListPeriods/GetAnalytics — `internal/adapter/grpc/metrics/` (proto ↔ domain conversion); screen selection — `internal/metrics/analytics.go`; presentation and per-block deadlines — `composer.go`, `charts.go`, `insights.go`, `presentation.go`, `calendar_labels.go`, `forecast_history.go` (the completed source-revision inventory of monthly coverage explains forecast locks without changing calculations) |
 | Pools, transaction manager, repositories | `internal/adapter/postgres/`; rules — `docs/migrations.md`, «Запросы на pgx» |
 | Migration runner and the PostgreSQL for tests | `github.com/fin-assist/go-migrate`, its public `migratetest`, `internal/testdb/` |
 | SQL migrations (embedded) | `migrations/`; rules — `docs/migrations.md` |

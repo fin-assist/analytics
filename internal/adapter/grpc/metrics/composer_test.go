@@ -93,7 +93,7 @@ func TestUnitComposerFullScreenKeepsFactsActionsAndTexts(t *testing.T) {
 		t.Fatal(ids)
 	}
 	tiles := valueOf(byID(got, "tiles"))["tiles"].([]any)
-	second := tiles[1].(map[string]any)
+	second := tiles[4].(map[string]any)
 	if second["id"] != "forecast" || second["value"] != float64(10120000) {
 		t.Fatal(second)
 	}
@@ -195,7 +195,8 @@ func TestUnitComposerSupportsExperimentsAndPeriodVariants(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if valueOf(byID(got, "tiles"))["tiles"].([]any)[1].(map[string]any)["id"] != "expense" {
+	tiles := valueOf(byID(got, "tiles"))["tiles"].([]any)
+	if len(tiles) != 4 || tiles[1].(map[string]any)["id"] != "expense" || tiles[1].(map[string]any)["value"] != float64(8432000) {
 		t.Fatal("stale forecast")
 	}
 }
@@ -215,7 +216,7 @@ func TestUnitComposerMissingCorruptAndUnsafeMetricsDegrade(t *testing.T) {
 	}
 	s.Snapshot = nil
 	got, e = c.Compose(t.Context(), s, nil, nil)
-	if e != nil || got.Period.Bounds.Coverage != commonv1.Coverage_COVERAGE_NO_DATA || byID(got, "tiles").Status != "unavailable" {
+	if e != nil || got.Period.Bounds.Coverage != commonv1.Coverage_COVERAGE_NO_DATA || byID(got, "tiles").Status != "none" || len(valueOf(byID(got, "tiles"))["tiles"].([]any)) != 0 {
 		t.Fatalf("no snapshot %+v %v", got, e)
 	}
 	if _, e = c.Compose(t.Context(), s, []*commonv1.BlockSupport{{Type: "heading", MaxVersion: 1}}, nil); e != nil {
