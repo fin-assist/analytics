@@ -1,0 +1,580 @@
+{
+  "user_id": "01a107db-ae80-7b07-b8a1-00000000a11c",
+  "calc_version": 10,
+  "state": {
+    "has_data": true,
+    "data_from": "2025-12-30T00:00:00+03:00",
+    "data_to": "2026-10-31T00:00:00+03:00",
+    "last_operation_at": "2026-10-15T12:00:00+03:00",
+    "stale_after": "2026-11-14T00:00:00+03:00",
+    "full_months": 1,
+    "time_zone": "Europe/Moscow",
+    "calculated_at": "2026-10-31T12:00:00+03:00",
+    "data_revisions": [
+      {
+        "code": "uploads",
+        "value": "3"
+      },
+      {
+        "code": "categories",
+        "value": "0"
+      },
+      {
+        "code": "time_zone",
+        "value": "0"
+      }
+    ]
+  },
+  "periods": [
+    {
+      "period": 4,
+      "period_key": "all_time",
+      "transfer_mode": 1,
+      "range": {
+        "start": "2025-12-30T00:00:00+03:00",
+        "end": "2026-10-31T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": 2,
+        "data_from": "2025-12-30T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-02-01T00:00:00+03:00",
+            "end": "2026-10-01T00:00:00+03:00"
+          }
+        ]
+      },
+      "unread_lines_count": 0,
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "uploads",
+          "value": "3"
+        },
+        {
+          "code": "categories",
+          "value": "0"
+        },
+        {
+          "code": "time_zone",
+          "value": "0"
+        }
+      ],
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "35000",
+            "filters": {
+              "from": "2025-12-30T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": 1,
+              "transfer_mode": 1
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "50000",
+            "filters": {
+              "from": "2025-12-30T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": 2,
+              "transfer_mode": 1
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "15000",
+            "balance": {
+              "share_of_income": 0.3
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "555"
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_supermarkets",
+                  "category_name": "Супермаркеты",
+                  "category_icon": "cart",
+                  "amount_minor": "30000",
+                  "operation_count": "2",
+                  "filters": {
+                    "from": "2025-12-30T00:00:00+03:00",
+                    "to": "2026-10-31T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "category_id": "cat_supermarkets"
+                  }
+                },
+                {
+                  "category_id": "cat_transfers",
+                  "category_name": "Переводы",
+                  "category_icon": "users",
+                  "amount_minor": "5000",
+                  "operation_count": "1",
+                  "filters": {
+                    "from": "2025-12-30T00:00:00+03:00",
+                    "to": "2026-10-31T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 1,
+                    "category_id": "cat_transfers"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_salary",
+                  "category_name": "Зарплата",
+                  "category_icon": "wallet",
+                  "amount_minor": "50000",
+                  "operation_count": "1",
+                  "filters": {
+                    "from": "2025-12-30T00:00:00+03:00",
+                    "to": "2026-10-31T00:00:00+03:00",
+                    "kind": 2,
+                    "transfer_mode": 1,
+                    "category_id": "cat_salary"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2025-12",
+                  "range": {
+                    "start": "2025-12-01T00:00:00+03:00",
+                    "end": "2026-01-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 2,
+                    "data_from": "2025-12-30T00:00:00+03:00",
+                    "data_to": "2025-12-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "10000",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-01",
+                  "range": {
+                    "start": "2026-01-01T00:00:00+03:00",
+                    "end": "2026-02-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 1,
+                    "data_from": "2026-01-01T00:00:00+03:00",
+                    "data_to": "2026-01-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-02",
+                  "range": {
+                    "start": "2026-02-01T00:00:00+03:00",
+                    "end": "2026-03-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-03",
+                  "range": {
+                    "start": "2026-03-01T00:00:00+03:00",
+                    "end": "2026-04-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-04",
+                  "range": {
+                    "start": "2026-04-01T00:00:00+03:00",
+                    "end": "2026-05-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-05",
+                  "range": {
+                    "start": "2026-05-01T00:00:00+03:00",
+                    "end": "2026-06-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-06",
+                  "range": {
+                    "start": "2026-06-01T00:00:00+03:00",
+                    "end": "2026-07-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-07",
+                  "range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-10",
+                  "range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-11-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 2,
+                    "data_from": "2026-10-01T00:00:00+03:00",
+                    "data_to": "2026-10-30T23:59:59+03:00"
+                  },
+                  "expense_minor": "25000",
+                  "income_minor": "50000"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "period": 4,
+      "period_key": "all_time",
+      "transfer_mode": 2,
+      "range": {
+        "start": "2025-12-30T00:00:00+03:00",
+        "end": "2026-10-31T00:00:00+03:00"
+      },
+      "bounds": {
+        "coverage": 2,
+        "data_from": "2025-12-30T00:00:00+03:00",
+        "data_to": "2026-10-30T23:59:59+03:00",
+        "gaps": [
+          {
+            "start": "2026-02-01T00:00:00+03:00",
+            "end": "2026-10-01T00:00:00+03:00"
+          }
+        ]
+      },
+      "unread_lines_count": 0,
+      "calculated_at": "2026-10-31T12:00:00+03:00",
+      "data_revisions": [
+        {
+          "code": "uploads",
+          "value": "3"
+        },
+        {
+          "code": "categories",
+          "value": "0"
+        },
+        {
+          "code": "time_zone",
+          "value": "0"
+        }
+      ],
+      "metrics": [
+        {
+          "metric_id": "tiles.expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "30000",
+            "filters": {
+              "from": "2025-12-30T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": 1,
+              "transfer_mode": 2
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.income",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "50000",
+            "filters": {
+              "from": "2025-12-30T00:00:00+03:00",
+              "to": "2026-10-31T00:00:00+03:00",
+              "kind": 2,
+              "transfer_mode": 2
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.balance",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "20000",
+            "balance": {
+              "share_of_income": 0.4
+            }
+          }
+        },
+        {
+          "metric_id": "tiles.daily_expense",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "value_minor": "476"
+          }
+        },
+        {
+          "metric_id": "expense_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_supermarkets",
+                  "category_name": "Супермаркеты",
+                  "category_icon": "cart",
+                  "amount_minor": "30000",
+                  "operation_count": "2",
+                  "filters": {
+                    "from": "2025-12-30T00:00:00+03:00",
+                    "to": "2026-10-31T00:00:00+03:00",
+                    "kind": 1,
+                    "transfer_mode": 2,
+                    "category_id": "cat_supermarkets"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "income_categories",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "categories": {
+              "items": [
+                {
+                  "category_id": "cat_salary",
+                  "category_name": "Зарплата",
+                  "category_icon": "wallet",
+                  "amount_minor": "50000",
+                  "operation_count": "1",
+                  "filters": {
+                    "from": "2025-12-30T00:00:00+03:00",
+                    "to": "2026-10-31T00:00:00+03:00",
+                    "kind": 2,
+                    "transfer_mode": 2,
+                    "category_id": "cat_salary"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "metric_id": "monthly_chart",
+          "definition_version": 1,
+          "metric": {
+            "status": 1,
+            "monthly_chart": {
+              "points": [
+                {
+                  "month": "2025-12",
+                  "range": {
+                    "start": "2025-12-01T00:00:00+03:00",
+                    "end": "2026-01-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 2,
+                    "data_from": "2025-12-30T00:00:00+03:00",
+                    "data_to": "2025-12-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "10000",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-01",
+                  "range": {
+                    "start": "2026-01-01T00:00:00+03:00",
+                    "end": "2026-02-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 1,
+                    "data_from": "2026-01-01T00:00:00+03:00",
+                    "data_to": "2026-01-31T23:59:59+03:00"
+                  },
+                  "expense_minor": "0",
+                  "income_minor": "0"
+                },
+                {
+                  "month": "2026-02",
+                  "range": {
+                    "start": "2026-02-01T00:00:00+03:00",
+                    "end": "2026-03-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-03",
+                  "range": {
+                    "start": "2026-03-01T00:00:00+03:00",
+                    "end": "2026-04-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-04",
+                  "range": {
+                    "start": "2026-04-01T00:00:00+03:00",
+                    "end": "2026-05-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-05",
+                  "range": {
+                    "start": "2026-05-01T00:00:00+03:00",
+                    "end": "2026-06-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-06",
+                  "range": {
+                    "start": "2026-06-01T00:00:00+03:00",
+                    "end": "2026-07-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-07",
+                  "range": {
+                    "start": "2026-07-01T00:00:00+03:00",
+                    "end": "2026-08-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-08",
+                  "range": {
+                    "start": "2026-08-01T00:00:00+03:00",
+                    "end": "2026-09-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-09",
+                  "range": {
+                    "start": "2026-09-01T00:00:00+03:00",
+                    "end": "2026-10-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 3
+                  }
+                },
+                {
+                  "month": "2026-10",
+                  "range": {
+                    "start": "2026-10-01T00:00:00+03:00",
+                    "end": "2026-11-01T00:00:00+03:00"
+                  },
+                  "bounds": {
+                    "coverage": 2,
+                    "data_from": "2026-10-01T00:00:00+03:00",
+                    "data_to": "2026-10-30T23:59:59+03:00"
+                  },
+                  "expense_minor": "20000",
+                  "income_minor": "50000"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

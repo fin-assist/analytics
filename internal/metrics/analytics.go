@@ -40,9 +40,16 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 			return domain.Analytics{}, err
 		}
 		key = &exact
-		if _, _, err := calendarRange(typ, exact, time.UTC); err != nil {
-			return domain.Analytics{}, err
+		if typ != domain.PeriodAllTime {
+			if _, _, err := calendarRange(typ, exact, time.UTC); err != nil {
+				return domain.Analytics{}, err
+			}
 		}
+	}
+	if typ == domain.PeriodAllTime {
+		// A single non-calendar key also works before the first new producer snapshot arrives.
+		exact := "all_time"
+		key = &exact
 	}
 	explicit := key != nil
 	data, err := s.store.ReadAnalytics(ctx, user, typ, key, mode)
@@ -70,12 +77,18 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 	if err != nil {
 		return domain.Analytics{}, err
 	}
-	start, end, err := calendarRange(typ, *key, zone)
-	if err != nil {
-		if !explicit {
-			return domain.Analytics{}, errors.New("analytics: invalid stored period")
+	var start, end time.Time
+	if typ == domain.PeriodAllTime {
+		start, end = *data.State.DataFrom, *data.State.DataTo
+		out.Previous, out.Next = nil, nil
+	} else {
+		start, end, err = calendarRange(typ, *key, zone)
+		if err != nil {
+			if !explicit {
+				return domain.Analytics{}, errors.New("analytics: invalid stored period")
+			}
+			return domain.Analytics{}, err
 		}
-		return domain.Analytics{}, err
 	}
 	out.Key = domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: typ, Key: *key}, Mode: mode}
 	out.Range = domain.TimeRange{Start: &start, End: &end}
@@ -91,12 +104,18 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 		// A previous month's completion count cannot explain today's calendar until daily delivery finishes.
 		out.History = nil
 	}
-	out.Current = !now.Before(*out.Range.Start) && now.Before(*out.Range.End)
+	out.Current = typ != domain.PeriodAllTime && !now.Before(*out.Range.Start) && now.Before(*out.Range.End)
 	out.Stale = data.State.StaleAfter != nil && !now.Before(*data.State.StaleAfter)
 	return out, nil
 }
 
 func exactKey(typ domain.PeriodType, key string) (string, error) {
+	if typ == domain.PeriodAllTime {
+		if err := (domain.PeriodKey{Type: typ, Key: key}).Validate(); err != nil {
+			return "", err
+		}
+		return key, nil
+	}
 	for _, input := range []domain.PeriodType{domain.PeriodMonth, domain.PeriodQuarter, domain.PeriodYear} {
 		if (domain.PeriodKey{Type: input, Key: key}).Validate() != nil {
 			continue
