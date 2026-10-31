@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -186,6 +187,7 @@ func TestUnitComposerSupportsExperimentsAndPeriodVariants(t *testing.T) {
 	chart := fixtureMetric(&s, "monthly_chart")
 	chart.Status = 3
 	chart.Lock = &domain.Lock{Reason: 2, Required: ptr(int32(2)), Available: ptr(int32(1))}
+	s.State.FullMonths = 0
 	got, e = c.Compose(t.Context(), s, nil, nil)
 	if e != nil || byID(got, "monthly_chart") != nil {
 		t.Fatalf("early %+v %v", got, e)
@@ -485,5 +487,68 @@ func TestUnitComposerCountersAndMalformedPresentationFacts(t *testing.T) {
 	point := &analyticsv1.MonthlyPoint{Month: s.Key.Key, Range: timerange(&s.Range), Bounds: &commonv1.DataBounds{Coverage: 2, DataFrom: timestamp(&from), DataTo: timestamp(&to), Gaps: []*commonv1.TimeRange{{Start: timestamp(&from), End: timestamp(&to)}}}}
 	if !strings.HasPrefix(p.barNote(point), "без ") {
 		t.Fatal("gap note")
+	}
+}
+
+func TestUnitGlobalEarlyChartCompositionMatchesKnownAndLegacyInventoryForAllPeriods(t *testing.T) {
+	for _, period := range []struct {
+		typ           domain.PeriodType
+		key           string
+		month, months int
+	}{
+		{domain.PeriodMonth, "2026-10", 10, 1}, {domain.PeriodQuarter, "2026-Q4", 10, 3}, {domain.PeriodYear, "2026", 1, 12},
+	} {
+		for _, known := range []bool{false, true} {
+			t.Run(period.key+"/known="+strconv.FormatBool(known), func(t *testing.T) {
+				s := screenFixture(t)
+				zone, _ := time.LoadLocation(s.State.TimeZone)
+				start := time.Date(2026, time.Month(period.month), 1, 0, 0, 0, 0, zone)
+				end := start.AddDate(0, period.months, 0)
+				s.Key = domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: period.typ, Key: period.key}, Mode: domain.TransferWith}
+				s.Range = domain.TimeRange{Start: &start, End: &end}
+				s.Snapshot.Key = s.Key
+				s.Snapshot.Range = &s.Range
+				s.Snapshot.Coverage = domain.CoveragePartial
+				coveredFrom := time.Date(2026, 10, 15, 0, 0, 0, 0, zone)
+				coveredTo := time.Date(2026, 10, 31, 0, 0, 0, 0, zone)
+				calculated := coveredTo.Add(12 * time.Hour)
+				s.State.DataFrom = &coveredFrom
+				s.State.DataTo = &coveredTo
+				s.State.CalculatedAt = &calculated
+				s.State.FullMonths = 0
+				metric := fixtureMetric(&s, "monthly_chart")
+				metric.Status = 3
+				metric.Lock = &domain.Lock{Reason: 2, Required: ptr(int32(2)), Available: ptr(int32(1))}
+				if known {
+					s.History = &domain.ForecastHistory{Months: []domain.HistoryMonth{{Key: "2026-10", Coverage: domain.CoveragePartial}}}
+				}
+				got, err := composerForTest(t).Compose(t.Context(), s, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if byID(got, "monthly_chart") != nil {
+					t.Fatalf("global early depends on metadata for %s", period.key)
+				}
+				if !known {
+					s.State.FullMonths = 1
+					got, err = composerForTest(t).Compose(t.Context(), s, nil, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if byID(got, "monthly_chart") == nil {
+						t.Fatal("one full month was guessed incomplete")
+					}
+					s.State.FullMonths = 0
+					metric.Lock.Available = nil
+					got, err = composerForTest(t).Compose(t.Context(), s, nil, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if byID(got, "monthly_chart") == nil {
+						t.Fatal("unknown monthly count was guessed as one")
+					}
+				}
+			})
+		}
 	}
 }

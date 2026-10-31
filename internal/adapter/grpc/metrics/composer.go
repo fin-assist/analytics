@@ -286,7 +286,7 @@ func (p composition) early() bool {
 		return len(history.Months) == 1 && history.Months[0].Coverage == domain.CoveragePartial
 	}
 	m, err := p.get("monthly_chart")
-	return err == nil && p.s.Key.Type == domain.PeriodMonth && p.s.Snapshot != nil && p.s.Snapshot.Coverage == domain.CoveragePartial && m.GetLock().GetReason() == analyticsv1.LockReason_LOCK_REASON_NEED_MONTHS_WITH_DATA && m.GetLock().GetAvailable() == 1
+	return err == nil && p.s.State.FullMonths == 0 && m.GetLock().GetReason() == analyticsv1.LockReason_LOCK_REASON_NEED_MONTHS_WITH_DATA && m.GetLock().GetAvailable() == 1
 }
 
 func (p composition) build(ctx context.Context, id string) ([]*commonv1.Block, error) {
