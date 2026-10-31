@@ -163,17 +163,29 @@ func TestUnitAllTimeKeepsGapCoverageZeroMonthActionsAndYearLabels(t *testing.T) 
 func TestUnitAllTimeBeforeDeliveryRetainsBoundsWithoutInventingZeroFacts(t *testing.T) {
 	s := allTimeFixture(t, 1)
 	s.Snapshot = nil
-	for _, version := range []int32{1, 2} {
-		got, err := composerForTest(t).Compose(t.Context(), s, []*commonv1.BlockSupport{{Type: "tile_group", MaxVersion: version}}, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		b := byID(got, "tiles")
-		if b.V != version || b.Status != "unavailable" || got.Period.Bounds.Coverage != 2 || got.Period.Bounds.DataFrom == nil || got.Period.Bounds.DataTo == nil {
-			t.Fatal(got)
-		}
-		if version == 2 && len(valueOf(b)["groups"].([]any)) != 0 {
-			t.Fatal(b)
+	from, _ := time.Parse(time.RFC3339, "2025-12-30T00:00:00+03:00")
+	to, _ := time.Parse(time.RFC3339, "2026-10-31T00:00:00+03:00")
+	for _, mode := range domain.TransferModes {
+		s.Key.Mode = mode
+		for _, version := range []int32{1, 2} {
+			got, err := composerForTest(t).Compose(t.Context(), s, []*commonv1.BlockSupport{{Type: "tile_group", MaxVersion: version}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !got.HasData || got.Params.Period != 4 || got.Params.PeriodKey != "all_time" || got.Params.TransferMode != commonv1.TransferMode(mode) || got.Period.IsCurrent || got.Navigation.Previous != nil || got.Navigation.Next != nil || !got.Period.Range.Start.AsTime().Equal(from) || !got.Period.Range.End.AsTime().Equal(to) || !got.State.DataFrom.AsTime().Equal(from) || !got.State.DataTo.AsTime().Equal(to) {
+				t.Fatal(got)
+			}
+			if got.Period.Bounds.Coverage != 2 || !got.Period.Bounds.DataFrom.AsTime().Equal(from) || !got.Period.Bounds.DataTo.AsTime().Equal(to.Add(-time.Nanosecond)) {
+				t.Fatal(got.Period.Bounds)
+			}
+			b := byID(got, "tiles")
+			key := "tiles"
+			if version == 2 {
+				key = "groups"
+			}
+			if b.V != version || b.Status != "unavailable" || len(valueOf(b)[key].([]any)) != 0 {
+				t.Fatal(b)
+			}
 		}
 	}
 	zone, _ := time.LoadLocation("Europe/Moscow")
@@ -282,7 +294,7 @@ func TestUnitAllTimeTimezoneRebuildRetainsFactsWithoutInventingDayPrecision(t *t
 		t.Fatal(err)
 	}
 	expense := valueOf(byID(got, "tiles"))["groups"].([]any)[0].(map[string]any)["tiles"].([]any)[0].(map[string]any)
-	if !strings.Contains(expense["caption"].(string), "За всё время") || !strings.Contains(expense["caption"].(string), "идёт пересчёт") || !got.Period.Range.Start.AsTime().Equal(before) || expense["value"] != float64(35000) {
+	if !strings.Contains(expense["caption"].(string), "всё время") || !strings.Contains(expense["caption"].(string), "идёт пересчёт") || !got.Period.Range.Start.AsTime().Equal(before) || expense["value"] != float64(35000) {
 		t.Fatal(expense)
 	}
 	s.State.Recalculating = false
@@ -355,6 +367,38 @@ func TestUnitAllTimeIgnoresCalendarOnlyRowsWithoutLosingAnyFact(t *testing.T) {
 				if !ok || tile["status"] != "ready" || tile["value"] != expected {
 					t.Fatalf("v%d mode%d fact %s: %v", version, mode, id, tile)
 				}
+			}
+		}
+	}
+}
+
+func TestUnitAllTimeRebuildCaptionsHaveOnePrepositionAndExactEmptyText(t *testing.T) {
+	for _, version := range []int32{1, 2} {
+		s := allTimeFixture(t, 1)
+		s.State.TimeZone = "America/New_York"
+		s.State.Recalculating = true
+		fixtureMetric(&s, "expense_categories").Status = 4
+		fixtureMetric(&s, "income_categories").Status = 4
+		got, err := composerForTest(t).Compose(t.Context(), s, []*commonv1.BlockSupport{{Type: "tile_group", MaxVersion: version}, {Type: "ranked_list", MaxVersion: 1}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var daily map[string]any
+		if version == 1 {
+			daily = valueOf(byID(got, "tiles"))["tiles"].([]any)[2].(map[string]any)
+		} else {
+			daily = valueOf(byID(got, "tiles"))["groups"].([]any)[1].(map[string]any)["tiles"].([]any)[0].(map[string]any)
+		}
+		want := "в среднем за всё время · неполные данные · идёт пересчёт"
+		if version == 2 {
+			want = "По дням с данными не позже сегодня; пропуски не учитываются\n" + want
+		}
+		if daily["caption"] != want {
+			t.Fatalf("v%d daily caption=%q want=%q", version, daily["caption"], want)
+		}
+		for _, tc := range []struct{ id, want string }{{"expense_categories", "Расходы по категориям: за всё время нет · неполные данные · идёт пересчёт"}, {"income_categories", "Доходы по категориям: за всё время нет · неполные данные · идёт пересчёт"}} {
+			if b := byID(got, tc.id); b.Status != "none" || b.GetEmptyText() != tc.want {
+				t.Fatalf("v%d %s: %v", version, tc.id, b)
 			}
 		}
 	}

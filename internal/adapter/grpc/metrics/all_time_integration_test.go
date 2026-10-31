@@ -4,6 +4,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
 	commonv1 "github.com/fin-assist/contracts/gen/go/finassist/common/v1"
@@ -42,9 +43,26 @@ func TestIntegrationAllTimeSnapshotsPersistModesCoverageAndRemovalWatermarks(t *
 		}
 		return r
 	}
-	pending := read(1, 2)
-	if !pending.HasData || pending.Params.PeriodKey != "all_time" || screenBlock(pending, "tiles").Status != "unavailable" || len(screenBlock(pending, "tiles").Data.AsMap()["groups"].([]any)) != 0 {
-		t.Fatal(pending)
+	from, _ := time.Parse(time.RFC3339, "2025-12-30T00:00:00+03:00")
+	to, _ := time.Parse(time.RFC3339, "2026-10-31T00:00:00+03:00")
+	for _, mode := range []commonv1.TransferMode{1, 2} {
+		for _, version := range []int32{1, 2} {
+			pending := read(mode, version)
+			if !pending.HasData || pending.Params.Period != 4 || pending.Params.PeriodKey != "all_time" || pending.Params.TransferMode != mode || pending.Period.IsCurrent || pending.Navigation.Previous != nil || pending.Navigation.Next != nil || !pending.Period.Range.Start.AsTime().Equal(from) || !pending.Period.Range.End.AsTime().Equal(to) || !pending.State.DataFrom.AsTime().Equal(from) || !pending.State.DataTo.AsTime().Equal(to) {
+				t.Fatal(pending)
+			}
+			if pending.Period.Bounds.Coverage != 2 || !pending.Period.Bounds.DataFrom.AsTime().Equal(from) || !pending.Period.Bounds.DataTo.AsTime().Equal(to.Add(-time.Nanosecond)) {
+				t.Fatal(pending.Period.Bounds)
+			}
+			b := screenBlock(pending, "tiles")
+			key := "tiles"
+			if version == 2 {
+				key = "groups"
+			}
+			if b.V != version || b.Status != "unavailable" || len(b.Data.AsMap()[key].([]any)) != 0 {
+				t.Fatal(b)
+			}
+		}
 	}
 	write, err := tr.ingest.UpsertUserMetrics(t.Context(), req)
 	if err != nil || write.AppliedPeriods != 2 {

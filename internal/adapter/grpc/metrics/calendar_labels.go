@@ -61,7 +61,7 @@ func (p composition) precisePointDays(point *analyticsv1.MonthlyPoint) bool {
 
 func periodName(key domain.PeriodKey) string {
 	if key.Type == domain.PeriodAllTime {
-		return "За всё время"
+		return "всё время"
 	}
 	start, _, ok := periodCalendarBounds(key, time.UTC)
 	if !ok {

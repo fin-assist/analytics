@@ -141,3 +141,44 @@ func TestAPICalendarSummaryGroupsKeepForecastFactsAndEmptyState(t *testing.T) {
 		t.Fatal(empty)
 	}
 }
+
+func TestAPIAllTimeBeforeFirstSnapshotKeepsExactStateBoundsWithoutZeros(t *testing.T) {
+	env, c := startAPI(t)
+	env.App.Now = func() time.Time { return time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC) }
+	raw, err := os.ReadFile("../../testdata/all_time.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateOnly := &analyticsv1.UpsertUserMetricsRequest{}
+	if err = protojson.Unmarshal(raw, stateOnly); err != nil {
+		t.Fatal(err)
+	}
+	stateOnly.Periods = nil // A legacy producer has delivered state but no singleton snapshot.
+	if _, err = c.ingest.UpsertUserMetrics(producer(t.Context()), stateOnly); err != nil {
+		t.Fatal(err)
+	}
+	from, _ := time.Parse(time.RFC3339, "2025-12-30T00:00:00+03:00")
+	to, _ := time.Parse(time.RFC3339, "2026-10-31T00:00:00+03:00")
+	for _, mode := range []commonv1.TransferMode{1, 2} {
+		for _, version := range []int32{1, 2} {
+			got, e := c.analytics.GetAnalytics(apitest.User(t.Context(), alice), &analyticsv1.GetAnalyticsRequest{Period: 4, TransferMode: mode, Supports: []*commonv1.BlockSupport{{Type: "tile_group", MaxVersion: version}}})
+			if e != nil {
+				t.Fatal(e)
+			}
+			if !got.HasData || got.Params.Period != 4 || got.Params.PeriodKey != "all_time" || got.Params.TransferMode != mode || got.Period.IsCurrent || got.Navigation.Previous != nil || got.Navigation.Next != nil || !got.Period.Range.Start.AsTime().Equal(from) || !got.Period.Range.End.AsTime().Equal(to) || !got.State.DataFrom.AsTime().Equal(from) || !got.State.DataTo.AsTime().Equal(to) {
+				t.Fatal(got)
+			}
+			if got.Period.Bounds.Coverage != 2 || !got.Period.Bounds.DataFrom.AsTime().Equal(from) || !got.Period.Bounds.DataTo.AsTime().Equal(to.Add(-time.Nanosecond)) {
+				t.Fatal(got.Period.Bounds)
+			}
+			b := screenBlock(got, "tiles")
+			key := "tiles"
+			if version == 2 {
+				key = "groups"
+			}
+			if b.V != version || b.Status != "unavailable" || len(b.Data.AsMap()[key].([]any)) != 0 {
+				t.Fatal(b)
+			}
+		}
+	}
+}
