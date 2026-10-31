@@ -24,12 +24,14 @@ type PeriodType int32
 
 // Known period types; UNSPECIFIED (0) is never stored.
 const (
-	PeriodMonth   PeriodType = 1
-	PeriodQuarter PeriodType = 2
-	PeriodYear    PeriodType = 3
+	PeriodMonth          PeriodType = 1
+	PeriodQuarter        PeriodType = 2
+	PeriodYear           PeriodType = 3
+	PeriodRollingYear    PeriodType = 5
+	PeriodRollingQuarter PeriodType = 6
 )
 
-// String is the bounded metric label of the type (grpc-api.md 9): month, quarter, year.
+// String is the bounded metric label of a known calendar or rolling period.
 func (t PeriodType) String() string {
 	switch t {
 	case PeriodMonth:
@@ -38,12 +40,18 @@ func (t PeriodType) String() string {
 		return "quarter"
 	case PeriodYear:
 		return "year"
+	case PeriodRollingYear:
+		return "rolling_year"
+	case PeriodRollingQuarter:
+		return "rolling_quarter"
 	}
 	return "unknown"
 }
 
 // Known reports whether t is a type this release stores.
-func (t PeriodType) Known() bool { return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear }
+func (t PeriodType) Known() bool {
+	return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear || t.Rolling()
+}
 
 // TransferMode is the number of finassist.common.v1.TransferMode.
 type TransferMode int32
@@ -87,9 +95,11 @@ type SnapshotKey struct {
 }
 
 var periodKeyGrammar = map[PeriodType]*regexp.Regexp{
-	PeriodMonth:   regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`),
-	PeriodQuarter: regexp.MustCompile(`^[0-9]{4}-Q[1-4]$`),
-	PeriodYear:    regexp.MustCompile(`^[0-9]{4}$`),
+	PeriodMonth:          regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`),
+	PeriodQuarter:        regexp.MustCompile(`^[0-9]{4}-Q[1-4]$`),
+	PeriodYear:           regexp.MustCompile(`^[0-9]{4}$`),
+	PeriodRollingYear:    regexp.MustCompile(`^rolling_year$`),
+	PeriodRollingQuarter: regexp.MustCompile(`^rolling_quarter$`),
 }
 
 // Validate checks the type and the exact grammar of the key: on it rests the equality of

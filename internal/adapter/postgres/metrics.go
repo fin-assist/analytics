@@ -221,6 +221,9 @@ func (r *Metrics) UpsertPeriods(ctx context.Context, userID string, version int3
 // ListPeriods reads the periods of one type with data, newest first. It reads the replica
 // unless the request asked for the primary.
 func (r *Metrics) ListPeriods(ctx context.Context, userID string, typ domain.PeriodType) (domain.Periods, error) {
+	if typ.Rolling() {
+		return r.rollingPeriods(ctx, userID, typ)
+	}
 	return listPeriods(ctx, r.db.Reader(ctx), userID, typ)
 }
 

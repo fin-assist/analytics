@@ -267,7 +267,7 @@ func TestIntegrationListPeriodsOverTransport(t *testing.T) {
 	bareInvalid(t, err)
 	_, err = tr.analytics.ListPeriods(ctx, &analyticsv1.ListPeriodsRequest{UserId: proto.String("not-a-uuid")})
 	bareInvalid(t, err)
-	_, err = tr.analytics.ListPeriods(user, &analyticsv1.ListPeriodsRequest{Period: commonv1.PeriodType(5)})
+	_, err = tr.analytics.ListPeriods(user, &analyticsv1.ListPeriodsRequest{Period: commonv1.PeriodType(99)})
 	if server.Reason(err) != "VALIDATION_ERROR" {
 		t.Fatalf("unknown period type: %v", err)
 	}

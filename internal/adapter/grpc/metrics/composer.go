@@ -70,6 +70,10 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 		}
 	}
 	bounds := &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_NO_DATA}
+	if s.Key.Type.Rolling() && s.Snapshot == nil {
+		// Missing delivery is unknown, not evidence of an uncovered period.
+		bounds.Coverage = commonv1.Coverage_COVERAGE_PARTIAL
+	}
 	state := &analyticsv1.ScreenState{Stale: s.Stale, LastOperationAt: timestamp(s.State.LastOperationAt), DataFrom: timestamp(s.State.DataFrom), DataTo: timestamp(s.State.DataTo), FullMonths: s.State.FullMonths, CalculatedAt: timestamp(s.State.CalculatedAt), Recalculating: s.State.Recalculating}
 	if snap := s.Snapshot; snap != nil {
 		bounds = &commonv1.DataBounds{Coverage: commonv1.Coverage(snap.Coverage), DataFrom: timestamp(snap.DataFrom), DataTo: timestamp(snap.DataTo)}
@@ -89,7 +93,7 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 	if s.Key.Type == domain.PeriodMonth {
 		ids = append(ids, "heading", "regular_payments", "notable_spending", "bank_fees", "small_frequent")
 	}
-	if s.Key.Type != domain.PeriodYear {
+	if s.Key.Type != domain.PeriodYear && !s.Key.Type.Rolling() {
 		ids = append(ids, "balance")
 	}
 	available, attempted := 0, 0
@@ -282,6 +286,9 @@ func safeNumbers(v any) error {
 }
 
 func (p composition) early() bool {
+	if p.s.Key.Type.Rolling() {
+		return false
+	}
 	if p.s.Rollover {
 		return false
 	}
@@ -438,7 +445,7 @@ func (p composition) tile(id, label string, m *analyticsv1.Metric, caption strin
 }
 
 func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
-	if p.s.Snapshot == nil {
+	if p.s.Snapshot == nil && !p.s.Key.Type.Rolling() {
 		payload, err := data(map[string]any{"tiles": []any{}})
 		return &commonv1.Block{Id: "tiles", Type: "tile_group", V: 1, Status: "none", Data: payload, EmptyText: ptr("За этот период данных нет"), AltText: ptr("За этот период данных нет")}, err
 	}
@@ -473,6 +480,10 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	}
 	dailyCaption := "в среднем за " + p.caption()
 	cmp := values["tiles.daily_expense.comparison"]
+	if p.s.Key.Type.Rolling() {
+		cmp = nil
+		dailyCaption = "По дням с данными не позже сегодня; пропуски не учитываются"
+	}
 	if ready(cmp) && cmp.ValueMinor != nil {
 		dailyCaption = "раньше — " + money(cmp.GetValueMinor())
 		if cmp.GetRange().GetStart() != nil {

@@ -45,15 +45,25 @@ func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, err
 		if point.ExpenseMinor != nil {
 			value = point.GetExpenseMinor()
 		}
-		points = append(points, p.barPoint(point, value))
+		bar := p.barPoint(point, value)
+		if p.s.Key.Type.Rolling() {
+			if err := rollingPoint(point, p.s.Range, p.zone); err != nil {
+				return nil, err
+			}
+			bar["range"] = rangeJSON(point.CalculationRange, p.zone)
+			if point.GetBounds().GetCoverage() != commonv1.Coverage_COVERAGE_NO_DATA {
+				bar["action"] = map[string]any{"type": "select_analytics_period", "period": "month", "date": point.Month}
+			}
+		}
+		points = append(points, bar)
 		v := "нет данных"
 		if point.ExpenseMinor != nil {
 			v = money(point.GetExpenseMinor())
 		}
-		alt = append(alt, monthName(point.Month, monthNom)+" "+v)
+		alt = append(alt, p.chartMonthName(point.Month, monthNom)+" "+v)
 	}
 	d := map[string]any{"kind": "bar", "value_kind": "amount", "points": points, "notes": p.chartNotes(chart.Points)}
-	if p.s.Key.Type != domain.PeriodYear && len(points) > 0 {
+	if p.s.Key.Type != domain.PeriodYear && !p.s.Key.Type.Rolling() && len(points) > 0 {
 		d["highlight_index"] = len(points) - 1
 	}
 	b.AltText = ptr(title(id) + ": " + strings.Join(alt, ", "))
@@ -138,8 +148,11 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 			}
 		}
 		if peak != nil {
-			notes = append(notes, map[string]any{"text": "Больше всего — в " + monthName(peak.Month, monthPrep) + ": " + money(peak.GetExpenseMinor()), "tone": "primary"})
+			notes = append(notes, map[string]any{"text": "Больше всего — в " + p.chartMonthName(peak.Month, monthPrep) + ": " + money(peak.GetExpenseMinor()), "tone": "primary"})
 		}
+	}
+	if p.s.Key.Type.Rolling() {
+		return notes
 	}
 	if p.s.Key.Type == domain.PeriodYear {
 		parts := []string{}
@@ -173,4 +186,13 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 		}
 	}
 	return notes
+}
+
+// chartMonthName makes repeated edge months distinguishable across years.
+func (p composition) chartMonthName(key string, names [12]string) string {
+	label := monthName(key, names)
+	if p.s.Key.Type.Rolling() && len(key) >= 4 {
+		label += " " + key[:4]
+	}
+	return label
 }

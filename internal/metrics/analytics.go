@@ -34,13 +34,17 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 	if !domain.ValidUserID(user) || !typ.Known() || (mode != domain.TransferWith && mode != domain.TransferWithout) {
 		return domain.Analytics{}, fmt.Errorf("%w: analytics parameters", domain.ErrInvalid)
 	}
+	selection := selectionFor(typ)
+	if key == nil {
+		key = selection.defaultKey()
+	}
 	if key != nil {
-		exact, err := exactKey(typ, *key)
+		exact, err := selection.exact(*key)
 		if err != nil {
 			return domain.Analytics{}, err
 		}
 		key = &exact
-		if _, _, err := calendarRange(typ, exact, time.UTC); err != nil {
+		if err := selection.validateKey(exact); err != nil {
 			return domain.Analytics{}, err
 		}
 	}
@@ -70,7 +74,7 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 	if err != nil {
 		return domain.Analytics{}, err
 	}
-	start, end, err := calendarRange(typ, *key, zone)
+	start, end, err := selection.bounds(*key, data.State, zone)
 	if err != nil {
 		if !explicit {
 			return domain.Analytics{}, errors.New("analytics: invalid stored period")
@@ -81,7 +85,11 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 	out.Range = domain.TimeRange{Start: &start, End: &end}
 	// An old period snapshot keeps its original calendar bounds while a time-zone rebuild runs.
 	if data.Snapshot != nil {
-		out.Range = *data.Snapshot.Range
+		if selection.retain(data.Snapshot.Range, out.Range) {
+			out.Range = *data.Snapshot.Range
+		} else {
+			out.Snapshot = nil
+		}
 	}
 	now := s.now()
 	calculated := data.State.CalculatedAt.In(zone)
@@ -91,7 +99,10 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 		// A previous month's completion count cannot explain today's calendar until daily delivery finishes.
 		out.History = nil
 	}
-	out.Current = !now.Before(*out.Range.Start) && now.Before(*out.Range.End)
+	out.Current = selection.current(now, out.Range)
+	if typ.Rolling() {
+		out.Previous, out.Next, out.History = nil, nil, nil
+	}
 	out.Stale = data.State.StaleAfter != nil && !now.Before(*data.State.StaleAfter)
 	return out, nil
 }

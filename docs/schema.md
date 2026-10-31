@@ -316,3 +316,9 @@ JSON object с целыми int64-значениями. При совпадаю�
 пользователя, частичную доставку, разные версии снимков и потерю месяца. API-регрессия
 `TestAPIFactAndForecastHistoryAcrossCalendarYearAndDelivery` воспроизводит скользящий год с 11 полными месяцами,
 отдельный факт и переходный текст без выдуманного диапазона.
+
+### Скользящие периоды (FIN-411)
+
+В `period_type` принимаются 5 (`rolling_year`) и 6 (`rolling_quarter`), ключ строго совпадает с именем типа; проверка — `PeriodKey.Validate`, номера прежних типов не переиспользуются. SQL/схема не меняются. Оба режима каждого singleton заменяются существующей атомарной записью и удаляются прежними версиями-надгробиями; старый outbox не восстанавливает удалённый снимок. `MonthlyPoint.calculation_range` хранится без потери точности в существующем `period_metric.details` рядом с календарными `month`/`range`.
+
+Перед композиционным выводом скользящей точки её диапазон проверяется как точное пересечение календарного месяца с диапазоном периода; неверные поля не расширяют денежную выборку, блок становится unavailable. Список rolling-периодов и GetAnalytics используют один согласованный read-state/selected-header снимок; если якорь состояния уже сменился, прежние суммы и покрытие заголовка не переносятся на новый диапазон. Тесты: `TestIntegrationRollingSlicesRoundTripReplaceAndTombstones`, `TestAPIRollingFactsSlicesModesKeysAndIsolation`, `TestAPIRollingPendingCoverageDailyReplacementAndRemoval` и unit rolling suites.
