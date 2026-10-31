@@ -127,6 +127,12 @@ func TestAPIRollingPendingCoverageDailyReplacementAndRemoval(t *testing.T) {
 	if got := read(); !got.HasData || got.Period.Bounds.Coverage != commonv1.Coverage_COVERAGE_PARTIAL || screenBlock(got, "tiles").Status != "unavailable" {
 		t.Fatalf("missing delivery fabricated facts %v", got)
 	}
+
+	initialList, err := c.analytics.ListPeriods(apitest.User(t.Context(), alice), &analyticsv1.ListPeriodsRequest{Period: commonv1.PeriodType_PERIOD_TYPE_ROLLING_QUARTER})
+	if err != nil || len(initialList.GetPeriods()) != 1 || initialList.Periods[0].Coverage != commonv1.Coverage_COVERAGE_PARTIAL {
+		t.Fatalf("missing header coverage: %v %v", initialList, err)
+	}
+	revisionsWant(t, initialList.DataRevisions, revisionsMap(t, stateOnly.State.DataRevisions))
 	req.CalcVersion++
 	if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
 		t.Fatal(err)
@@ -243,5 +249,84 @@ func TestAPIRollingMidnightGapAndRepeatedMonthBoundary(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAPIRollingListMatchesDeliveredWithoutCoverage(t *testing.T) {
+	env, c := startAPI(t)
+	req := rollingRequest(t)
+	env.App.Now = func() time.Time { return req.State.CalculatedAt.AsTime() }
+	var without []*analyticsv1.PeriodSnapshot
+	for _, p := range req.Periods {
+		if p.TransferMode == commonv1.TransferMode_TRANSFER_MODE_WITHOUT {
+			p.Bounds.Coverage = commonv1.Coverage_COVERAGE_COMPLETE
+			p.Bounds.Gaps = nil
+			p.Metrics = nil
+			without = append(without, p)
+		}
+	}
+	req.Periods = without
+	if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
+		t.Fatal(err)
+	}
+	ctx := apitest.User(t.Context(), alice)
+	for _, p := range without {
+		got, err := c.analytics.GetAnalytics(ctx, &analyticsv1.GetAnalyticsRequest{Period: p.Period, TransferMode: commonv1.TransferMode_TRANSFER_MODE_WITHOUT})
+		if err != nil || got.GetPeriod().GetBounds().GetCoverage() != commonv1.Coverage_COVERAGE_COMPLETE {
+			t.Fatalf("delivered facts: %v %v", got, err)
+		}
+		listed, err := c.analytics.ListPeriods(ctx, &analyticsv1.ListPeriodsRequest{Period: p.Period})
+		if err != nil || len(listed.GetPeriods()) != 1 || listed.Periods[0].Coverage != got.Period.Bounds.Coverage || !proto.Equal(listed.Periods[0].Range, got.Period.Range) {
+			t.Fatalf("WITHOUT-only list disagrees: %v / %v %v", listed, got.Period, err)
+		}
+		revisionsWant(t, listed.DataRevisions, revisionsMap(t, got.DataRevisions))
+	}
+	// A newer state must never certify the old complete header for the new range.
+	pending := proto.Clone(req).(*analyticsv1.UpsertUserMetricsRequest)
+	pending.CalcVersion++
+	pending.Periods = nil
+	pending.State.Recalculating = true
+	pending.State.DataTo = timestamppb.New(pending.State.DataTo.AsTime().AddDate(0, 0, 1))
+	for _, revision := range pending.State.DataRevisions {
+		if revision.Code == "uploads" {
+			revision.Value++
+		}
+	}
+	if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), pending); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range without {
+		listed, err := c.analytics.ListPeriods(ctx, &analyticsv1.ListPeriodsRequest{Period: p.Period})
+		if err != nil || len(listed.GetPeriods()) != 1 || listed.Periods[0].Coverage != commonv1.Coverage_COVERAGE_PARTIAL || !listed.Periods[0].Range.End.AsTime().Equal(pending.State.DataTo.AsTime()) {
+			t.Fatalf("new state retained old complete/provenance: %v %v", listed, err)
+		}
+		revisionsWant(t, listed.DataRevisions, revisionsMap(t, pending.State.DataRevisions))
+	}
+
+}
+
+func TestAPIInvalidStateDayEndIsRejectedAtomically(t *testing.T) {
+	env, c := startAPI(t)
+	req := rollingRequest(t)
+	env.App.Now = func() time.Time { return req.State.CalculatedAt.AsTime() }
+	if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
+		t.Fatal(err)
+	}
+	read := func() *analyticsv1.GetAnalyticsResponse {
+		t.Helper()
+		got, err := c.analytics.GetAnalytics(apitest.User(t.Context(), alice), &analyticsv1.GetAnalyticsRequest{Period: commonv1.PeriodType_PERIOD_TYPE_ROLLING_QUARTER})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	before := read()
+	bad := proto.Clone(req).(*analyticsv1.UpsertUserMetricsRequest)
+	bad.CalcVersion++
+	bad.State.DataTo = timestamppb.New(bad.State.DataTo.AsTime().Add(time.Hour))
+	_, err := c.ingest.UpsertUserMetrics(producer(t.Context()), bad)
+	wantBare(t, err, codes.InvalidArgument)
+	if got := read(); !proto.Equal(got, before) {
+		t.Fatalf("rejected batch changed facts: %v / %v", got, before)
 	}
 }

@@ -92,6 +92,7 @@
 | `filters` метрики есть ⇒ есть `from` и `to`; нет `q`, `amount_from_minor`, `amount_to_minor` | проверка снимка. `filter_from` — признак присутствия фильтра (`docs/calc.md` 5: у каждого перехода метрики есть период P); колонок для `q` и сумм нет, без проверки они пропали бы молча |
 | моменты — с точностью до микросекунд | не проверяется: `timestamptz` хранит микросекунды, наносекунды `Timestamp` отбрасываются (тест). Моменты `bank-statement-data` — начала дней и время из PostgreSQL, наносекунд в них нет. В `details` (protojson, RFC 3339) наносекунды сохраняются |
 | границы состояния — обе или ни одной, `data_from < data_to` | проверка `UserDataState` |
+| `state.data_to` — первый реальный момент дня после последнего покрытого дня в `time_zone` | проверка `UserDataState` через `CivilDayStart`: gap допускает начало в 01:00, повторная полночь — только первое вхождение. Нарушение отклоняет весь ingest bare `INVALID_ARGUMENT` до записи. При смене пояса producer pending сохраняет согласованную прежнюю пару `time_zone`/границ, затем публикует полный новый state |
 | `stale_after` есть ⇔ есть границы, и `stale_after > data_to` | проверка `UserDataState` |
 | `has_data` ⇒ есть границы и `last_operation_at` | проверка `UserDataState` |
 | `full_months ≥ 0` | проверка `UserDataState` |
@@ -319,7 +320,7 @@ JSON object с целыми int64-значениями. При совпадаю�
 
 ### Скользящие периоды (FIN-411)
 
-В `period_type` принимаются 5 (`rolling_year`) и 6 (`rolling_quarter`), ключ строго совпадает с именем типа; проверка — `PeriodKey.Validate`, номера прежних типов не переиспользуются. SQL/схема не меняются. Оба режима каждого singleton заменяются существующей атомарной записью и удаляются прежними версиями-надгробиями; старый outbox не восстанавливает удалённый снимок. `MonthlyPoint.calculation_range` хранится без потери точности в существующем `period_metric.details` рядом с календарными `month`/`range`.
+В `period_type` принимаются 5 (`rolling_year`) и 6 (`rolling_quarter`), ключ строго совпадает с именем типа; проверка — `PeriodKey.Validate`, номера прежних типов не переиспользуются. Схема не меняется. Оба режима каждого singleton заменяются существующей атомарной записью и удаляются прежними версиями-надгробиями; старый outbox не восстанавливает удалённый снимок. `MonthlyPoint.calculation_range` хранится без потери точности в существующем `period_metric.details` рядом с календарными `month`/`range`.
 
 Перед композиционным выводом скользящей точки её диапазон проверяется как точное пересечение календарного месяца с диапазоном периода; неверные поля не расширяют денежную выборку, блок становится unavailable. Список rolling-периодов и GetAnalytics используют один согласованный read-state/selected-header снимок; если якорь состояния уже сменился, прежние суммы и покрытие заголовка не переносятся на новый диапазон. Тесты: `TestIntegrationRollingSlicesRoundTripReplaceAndTombstones`, `TestAPIRollingFactsSlicesModesKeysAndIsolation`, `TestAPIRollingPendingCoverageDailyReplacementAndRemoval` и unit rolling suites.
 
@@ -335,3 +336,9 @@ JSON object с целыми int64-значениями. При совпадаю�
 `ListPeriods(period=4)` возвращает этот же точный диапазон и сохранённую coverage. Поля smallint/text и существующие
 ключи уже вмещают тип4: миграция и дополнительные ограничения БД не требуются. Тесты all_time проверяют оба режима,
 пропуски, повтор старой версии, removal watermark, изоляцию пользователя и tombstone через настоящий PostgreSQL.
+
+Rolling `ListPeriods` читает только state и доступный заголовок одним `rollingPeriodsSQL`: оба режима,
+`NOT removed`, приоритет `transfer_mode DESC` как у обычного списка. Факт наличия только WITHOUT не превращает
+complete в partial. Проверка proof охватывает все заголовки/надгробия пользователя; чистая domain-функция
+`RollingPeriods` использует общие `RollingRange`/`TimeRange.SameBounds` с выбором экрана: согласованный заголовок
+даёт свою coverage и пересечение ревизий, прежний якорь/отсутствующий заголовок — partial и ревизии state.

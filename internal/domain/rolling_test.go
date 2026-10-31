@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -84,5 +85,59 @@ func TestUnitCivilDayStartHandlesMissingDatesAndInvalidInputs(t *testing.T) {
 		if _, ok := CivilDayStart(tc.year, tc.month, tc.day, tc.zone); ok {
 			t.Fatalf("invalid date accepted%+v", tc)
 		}
+	}
+}
+
+func TestUnitStateAcceptsOnlyFirstRealCoveredDayEnd(t *testing.T) {
+	for _, tc := range []struct{ zone, end string }{
+		{"UTC", "2026-10-31T00:00:00Z"},
+		{"America/Sao_Paulo", "2018-11-04T01:00:00-02:00"},
+		{"America/Havana", "2020-11-01T00:00:00-04:00"},
+	} {
+		t.Run(tc.zone, func(t *testing.T) {
+			end, err := time.Parse(time.RFC3339, tc.end)
+			if err != nil {
+				t.Fatal(err)
+			}
+			from := end.AddDate(0, -1, 0)
+			stale := end.AddDate(0, 0, 14)
+			state := &State{HasData: true, DataFrom: &from, DataTo: &end, LastOperationAt: &from, StaleAfter: &stale, CalculatedAt: &end, TimeZone: tc.zone}
+			if err = state.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			later := end.Add(time.Hour)
+			state.DataTo = &later
+			if err = state.Validate(); !errors.Is(err, ErrInvalid) {
+				t.Fatalf("non-first day instant accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestUnitRollingPeriodMetadataUsesExactBoundsAndRevisionIntersection(t *testing.T) {
+	from := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	state := &State{DataFrom: &from, DataTo: &end, TimeZone: "UTC", Revisions: Revisions{"uploads": 2, "categories": 1}}
+	span := &TimeRange{Start: &from, End: &end}
+	snapshot := &Snapshot{Range: span, Coverage: CoverageComplete, Revisions: Revisions{"uploads": 1, "categories": 1}}
+	got, err := RollingPeriods(PeriodRollingQuarter, state, snapshot)
+	if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != CoverageComplete || len(got.Revisions) != 1 || got.Revisions["categories"] != 1 {
+		t.Fatalf("coherent %+v %v", got, err)
+	}
+	next := end.AddDate(0, 0, 1)
+	state.DataTo = &next
+	for _, stored := range []*Snapshot{snapshot, nil} {
+		got, err = RollingPeriods(PeriodRollingQuarter, state, stored)
+		if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != CoveragePartial || len(got.Revisions) != 2 || got.Revisions["uploads"] != 2 {
+			t.Fatalf("pending %+v %v", got, err)
+		}
+	}
+	for _, missing := range []*TimeRange{nil, {}, {Start: &from}, {End: &end}} {
+		if span.SameBounds(missing) || missing.SameBounds(span) {
+			t.Fatal("absent bound certified")
+		}
+	}
+	if !span.SameBounds(&TimeRange{Start: &from, End: &end}) {
+		t.Fatal("equal bounds rejected")
 	}
 }

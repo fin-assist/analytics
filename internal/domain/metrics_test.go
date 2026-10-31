@@ -35,7 +35,7 @@ func validSnapshot(typ PeriodType, key string, mode TransferMode) Snapshot {
 func validState() *State {
 	return &State{
 		HasData: true, DataFrom: at(2026, 9, 1), DataTo: at(2026, 9, 26), LastOperationAt: at(2026, 9, 25),
-		StaleAfter: at(2026, 10, 10), FullMonths: 1, TimeZone: "Europe/Moscow", CalculatedAt: at(2026, 9, 26),
+		StaleAfter: at(2026, 10, 10), FullMonths: 1, TimeZone: "UTC", CalculatedAt: at(2026, 9, 26),
 	}
 }
 

@@ -67,7 +67,7 @@ func (r rollingSelection) bounds(_ string, state *domain.State, zone *time.Locat
 }
 func (r rollingSelection) current(time.Time, domain.TimeRange) bool { return false }
 func (r rollingSelection) retain(stored *domain.TimeRange, expected domain.TimeRange) bool {
-	return stored != nil && stored.Start != nil && stored.End != nil && stored.Start.Equal(*expected.Start) && stored.End.Equal(*expected.End)
+	return expected.SameBounds(stored)
 }
 
 func selectionFor(typ domain.PeriodType) periodSelection {

@@ -32,3 +32,35 @@ func RollingRange(typ PeriodType, end *time.Time, zone *time.Location) (TimeRang
 	}
 	return TimeRange{Start: &start, End: &finish}, nil
 }
+
+// SameBounds compares exact persisted instants; absent boundaries are never certified.
+func (r *TimeRange) SameBounds(other *TimeRange) bool {
+	return r != nil && other != nil && r.Start != nil && r.End != nil && other.Start != nil && other.End != nil && r.Start.Equal(*other.Start) && r.End.Equal(*other.End)
+}
+
+// RollingPeriods resolves list metadata from one coherent state/header read.
+// It shares the rolling bounds and exact snapshot retention rule with screen selection.
+func RollingPeriods(typ PeriodType, state *State, snapshot *Snapshot) (Periods, error) {
+	if state == nil {
+		return Periods{}, nil
+	}
+	out := Periods{TimeZone: state.TimeZone, Revisions: state.Revisions}
+	if state.DataFrom == nil || state.DataTo == nil {
+		return out, nil
+	}
+	zone, err := time.LoadLocation(state.TimeZone)
+	if err != nil {
+		return Periods{}, err
+	}
+	span, err := RollingRange(typ, state.DataTo, zone)
+	if err != nil {
+		return Periods{}, err
+	}
+	coverage := CoveragePartial
+	if snapshot != nil && span.SameBounds(snapshot.Range) {
+		coverage = snapshot.Coverage
+		out.Revisions = snapshot.Revisions.Intersect(state.Revisions)
+	}
+	out.Items = []PeriodItem{{Key: typ.String(), Start: *span.Start, End: *span.End, Coverage: coverage}}
+	return out, nil
+}

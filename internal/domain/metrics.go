@@ -399,7 +399,18 @@ func (s *State) Validate() error {
 	if s.FullMonths < 0 {
 		return invalid("state full_months %d", s.FullMonths)
 	}
-	return ValidateTimeZone(s.TimeZone)
+	if err := ValidateTimeZone(s.TimeZone); err != nil {
+		return err
+	}
+	if s.DataTo != nil {
+		zone, _ := time.LoadLocation(s.TimeZone)
+		local := s.DataTo.In(zone)
+		boundary, exists := CivilDayStart(local.Year(), local.Month(), local.Day(), zone)
+		if !exists || !boundary.Equal(*s.DataTo) {
+			return invalid("state data_to is not a covered-day boundary")
+		}
+	}
+	return nil
 }
 
 // ValidateTimeZone accepts an IANA zone name and nothing that merely loads: the empty

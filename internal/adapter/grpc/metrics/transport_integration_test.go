@@ -132,7 +132,7 @@ func batch(user string, version int32) *analyticsv1.UpsertUserMetricsRequest {
 	}
 	return &analyticsv1.UpsertUserMetricsRequest{
 		UserId: user, CalcVersion: version,
-		State: &analyticsv1.UserDataState{HasData: true, DataFrom: at(1), DataTo: at(21), LastOperationAt: at(20), StaleAfter: at(28),
+		State: &analyticsv1.UserDataState{HasData: true, DataFrom: at(1), DataTo: timestamppb.New(at(21).AsTime().Add(-3 * time.Hour)), LastOperationAt: at(20), StaleAfter: at(28),
 			FullMonths: 1, TimeZone: "Europe/Moscow", CalculatedAt: at(21)},
 		Periods:        []*analyticsv1.PeriodSnapshot{period(commonv1.TransferMode_TRANSFER_MODE_WITH), period(commonv1.TransferMode_TRANSFER_MODE_WITHOUT)},
 		RemovedPeriods: []*analyticsv1.PeriodRef{{Period: commonv1.PeriodType_PERIOD_TYPE_MONTH, PeriodKey: "2026-08"}},
@@ -173,6 +173,9 @@ func TestIntegrationUpsertUserMetricsRulesOverTransport(t *testing.T) {
 		"state time zone":      func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.TimeZone = "../UTC" },
 		"state without moment": func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.CalculatedAt = nil },
 		"state one bound":      func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.DataTo = nil },
+		"state non-day end": func(r *analyticsv1.UpsertUserMetricsRequest) {
+			r.State.DataTo = timestamppb.New(r.State.DataTo.AsTime().Add(time.Hour))
+		},
 		"state stale":          func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.StaleAfter = at(2) },
 		"state has data":       func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.LastOperationAt = nil },
 		"state full months":    func(r *analyticsv1.UpsertUserMetricsRequest) { r.State.FullMonths = -1 },

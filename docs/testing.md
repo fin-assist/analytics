@@ -80,3 +80,11 @@ FIN-411 после объединения PR51: `TestAPICombinedCalendarAllTimeA
 значений, статусов, locks и действий при переключении групп. `TestUnitPeriodSelectionsKeepCalendarAndSingletonSemantics`
 проверяет все шесть типов через общий интерфейс стратегий. All-time state fallback/retained-range регрессии
 предшествующего PR сохранены; assistant chips запрещает BFF, RPC-чтение assistant остаётся разрешённым по контракту.
+
+FIN-411 review regressions: WITHOUT-only complete проверен `TestIntegrationRollingListUsesAvailableWithoutHeader`
+и `TestAPIRollingListMatchesDeliveredWithoutCoverage` (первоначально оба воспроизводили partial вместо complete).
+Integration дополнительно проверяет WITHOUT-first при двух заголовках и WITH fallback при удалённом WITHOUT.
+`TestIntegrationRollingListCertifiesOnlyCurrentHeaderRevisions` и API проверяют coverage/revisions согласованного
+снимка, нового state перед старым снимком и отсутствующего снимка. Unit проверяет query/scan/iteration failures
+и повреждённую provenance. `TestAPIInvalidStateDayEndIsRejectedAtomically` доказывает отказ всего ingest без
+изменения прежнего ответа; unit и прежний midnight-gap API подтверждают первый реальный civil-момент в 01:00.

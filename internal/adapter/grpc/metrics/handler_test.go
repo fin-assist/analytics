@@ -53,7 +53,7 @@ func rng(from, to int) *commonv1.TimeRange { return &commonv1.TimeRange{Start: t
 func request() *analyticsv1.UpsertUserMetricsRequest {
 	return &analyticsv1.UpsertUserMetricsRequest{
 		UserId: user, CalcVersion: 4,
-		State: &analyticsv1.UserDataState{HasData: true, DataFrom: ts(1), DataTo: ts(26), LastOperationAt: ts(25),
+		State: &analyticsv1.UserDataState{HasData: true, DataFrom: ts(1), DataTo: timestamppb.New(ts(26).AsTime().Add(-3 * time.Hour)), LastOperationAt: ts(25),
 			StaleAfter: ts(28), FullMonths: 2, Recalculating: true, TimeZone: "Europe/Moscow", CalculatedAt: ts(26)},
 		Periods: []*analyticsv1.PeriodSnapshot{{
 			Period: commonv1.PeriodType_PERIOD_TYPE_MONTH, PeriodKey: "2026-09", TransferMode: commonv1.TransferMode_TRANSFER_MODE_WITHOUT,
