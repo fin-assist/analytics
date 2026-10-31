@@ -50,6 +50,10 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 		return domain.Analytics{}, err
 	}
 	out := domain.Analytics{AnalyticsData: data}
+	if data.Snapshot == nil {
+		// calc.md section 4: an explicit period outside the covered list has no neighbours.
+		out.Previous, out.Next = nil, nil
+	}
 	if data.State == nil || !data.State.HasData {
 		return out, nil
 	}
@@ -80,6 +84,13 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 		out.Range = *data.Snapshot.Range
 	}
 	now := s.now()
+	calculated := data.State.CalculatedAt.In(zone)
+	current := now.In(zone)
+	out.Rollover = calculated.Year() != current.Year() || calculated.Month() != current.Month()
+	if out.Rollover {
+		// A previous month's completion count cannot explain today's calendar until daily delivery finishes.
+		out.History = nil
+	}
 	out.Current = !now.Before(*out.Range.Start) && now.Before(*out.Range.End)
 	out.Stale = data.State.StaleAfter != nil && !now.Before(*data.State.StaleAfter)
 	return out, nil

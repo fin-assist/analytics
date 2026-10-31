@@ -282,8 +282,14 @@ func safeNumbers(v any) error {
 }
 
 func (p composition) early() bool {
+	if p.s.Rollover {
+		return false
+	}
+	if history := p.s.History; history != nil {
+		return len(history.Months) == 1 && history.Months[0].Coverage == domain.CoveragePartial
+	}
 	m, err := p.get("monthly_chart")
-	return err == nil && p.s.Key.Type == domain.PeriodMonth && p.s.Snapshot != nil && p.s.Snapshot.Coverage == domain.CoveragePartial && m.GetLock().GetReason() == analyticsv1.LockReason_LOCK_REASON_NEED_MONTHS_WITH_DATA && m.GetLock().GetAvailable() == 1
+	return err == nil && p.s.State.FullMonths == 0 && m.GetLock().GetReason() == analyticsv1.LockReason_LOCK_REASON_NEED_MONTHS_WITH_DATA && m.GetLock().GetAvailable() == 1
 }
 
 func (p composition) build(ctx context.Context, id string) ([]*commonv1.Block, error) {
@@ -353,6 +359,9 @@ func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockL
 			} else {
 				out.Text += fmt.Sprintf(", есть %d", l.GetAvailable())
 			}
+		}
+		if id == "forecast" {
+			out.Text += p.forecastHistoryText(l)
 		}
 	case analyticsv1.LockReason_LOCK_REASON_NEED_MONTHS_WITH_DATA:
 		out.Reason = "need_months_with_data"
@@ -429,6 +438,10 @@ func (p composition) tile(id, label string, m *analyticsv1.Metric, caption strin
 }
 
 func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
+	if p.s.Snapshot == nil {
+		payload, err := data(map[string]any{"tiles": []any{}})
+		return &commonv1.Block{Id: "tiles", Type: "tile_group", V: 1, Status: "none", Data: payload, EmptyText: ptr("За этот период данных нет"), AltText: ptr("За этот период данных нет")}, err
+	}
 	ids := []string{"tiles.balance", "tiles.expense", "tiles.daily_expense", "tiles.income", "tiles.forecast", "tiles.daily_expense.comparison"}
 	values := map[string]*analyticsv1.Metric{}
 	for _, id := range ids {
@@ -447,15 +460,16 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 			share = fmt.Sprintf("−%d%% · потратили больше, чем получили", -pct)
 		}
 	}
-	second := p.tile("expense", "Расходы", expense, p.caption())
+	actual := p.tile("expense", "Расходы", expense, p.caption())
+	var forecastTile map[string]any
 	forecast := values["tiles.forecast"]
 	if p.s.Current && !p.s.Stale && forecast.GetLock().GetReason() != analyticsv1.LockReason_LOCK_REASON_STALE_DATA {
 		label := "Прогноз расходов"
 		if p.s.Key.Type == domain.PeriodYear {
 			label = "Прогноз на год"
 		}
-		second = p.tile("forecast", label, forecast, p.forecastCaption())
-		second["approx"] = true
+		forecastTile = p.tile("forecast", label, forecast, p.forecastCaption())
+		forecastTile["approx"] = true
 	}
 	dailyCaption := "в среднем за " + p.caption()
 	cmp := values["tiles.daily_expense.comparison"]
@@ -465,8 +479,11 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 			dailyCaption = "в " + monthPrep[calendarMonth(cmp.Range.Start).Month()-1] + " — " + money(cmp.GetValueMinor())
 		}
 	}
-	tiles := []any{p.tile("balance", "Доходы минус расходы", bal, share), second, p.tile("daily_expense", "Расходы в день", daily, dailyCaption), p.tile("income", "Доходы", income, "")}
+	tiles := []any{p.tile("balance", "Доходы минус расходы", bal, share), actual, p.tile("daily_expense", "Расходы в день", daily, dailyCaption), p.tile("income", "Доходы", income, "")}
 	tiles[3].(map[string]any)["show_plus"] = true
+	if forecastTile != nil {
+		tiles = append(tiles, forecastTile)
+	}
 	b := &commonv1.Block{Id: "tiles", Type: "tile_group", V: 1, Status: "ready", AltText: ptr("Сводные показатели за " + p.caption())}
 	allMissing := true
 	for _, t := range tiles {

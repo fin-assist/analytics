@@ -81,7 +81,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Fatalf("screen header %+v", got)
 	}
 	tiles := screenBlock(got, "tiles").Data.AsMap()["tiles"].([]any)
-	if tiles[0].(map[string]any)["value"] != float64(7258000) || tiles[1].(map[string]any)["id"] != "forecast" || tiles[2].(map[string]any)["value"] != float64(337280) || tiles[3].(map[string]any)["show_plus"] != true {
+	if tiles[0].(map[string]any)["value"] != float64(7258000) || tiles[1].(map[string]any)["id"] != "expense" || tiles[4].(map[string]any)["id"] != "forecast" || tiles[2].(map[string]any)["value"] != float64(337280) || tiles[3].(map[string]any)["show_plus"] != true {
 		t.Fatal(tiles)
 	}
 	if screenBlock(got, "regular_payments").Status != "tentative" || screenBlock(got, "regular_payments").Data.AsMap()["items_more"].(map[string]any)["value"] != float64(90000) {
@@ -156,11 +156,11 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Fatal("unsupported blocks")
 	}
 	got = read(&analyticsv1.GetAnalyticsRequest{PeriodKey: proto.String("2026-08")})
-	if got.Period.Bounds.Coverage != commonv1.Coverage_COVERAGE_NO_DATA || got.Period.Bounds.DataFrom != nil || got.Navigation.GetNext() != "2026-09" || screenBlock(got, "tiles").Status != "unavailable" {
+	if got.Period.Bounds.Coverage != commonv1.Coverage_COVERAGE_NO_DATA || got.Period.Bounds.DataFrom != nil || got.Navigation.GetNext() != "" || got.Navigation.GetPrevious() != "" || screenBlock(got, "tiles").Status != "none" || len(screenBlock(got, "tiles").Data.AsMap()["tiles"].([]any)) != 0 {
 		t.Fatalf("no coverage %+v", got)
 	}
 	got = read(&analyticsv1.GetAnalyticsRequest{PeriodKey: proto.String("2026-10")})
-	if got.Navigation.GetPrevious() != "2026-09" || got.Period.IsCurrent {
+	if got.Navigation.GetPrevious() != "" || got.Navigation.GetNext() != "" || got.Period.IsCurrent {
 		t.Fatal("future navigation")
 	}
 	// Existing definition versions remain usable until the complete snapshot is replaced.
@@ -266,6 +266,9 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	}
 	req = analyticsFixture(t)
 	req.CalcVersion = 210
+	// One incomplete covered month has no full months (calc.md section 4).
+	req.State.FullMonths = 0
+	req.State.DataFrom = req.Periods[0].Bounds.DataFrom
 	for _, s := range req.Periods {
 		for _, m := range s.Metrics {
 			if m.MetricId == "monthly_chart" {
@@ -286,7 +289,8 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	req.State.StaleAfter = timestamppb.New(req.State.DataTo.AsTime().Add(time.Hour))
 	write()
 	got = read(&analyticsv1.GetAnalyticsRequest{})
-	if !got.State.Stale || screenBlock(got, "tiles").Data.AsMap()["tiles"].([]any)[1].(map[string]any)["id"] != "expense" {
+	staleTiles := screenBlock(got, "tiles").Data.AsMap()["tiles"].([]any)
+	if !got.State.Stale || len(staleTiles) != 4 || staleTiles[1].(map[string]any)["id"] != "expense" || staleTiles[1].(map[string]any)["value"] != float64(8432000) {
 		t.Fatal("stale fact fallback")
 	}
 	req = analyticsFixture(t)
@@ -370,7 +374,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 func assertRebuiltCalendar(t *testing.T, r *analyticsv1.GetAnalyticsResponse, source *analyticsv1.PeriodSnapshot) {
 	t.Helper()
 	tiles := screenBlock(r, "tiles").Data.AsMap()["tiles"].([]any)
-	if tiles[1].(map[string]any)["caption"] != "на сентябрь" || tiles[2].(map[string]any)["caption"] != "в августе — 2 890 ₽" {
+	if tiles[4].(map[string]any)["caption"] != "на сентябрь" || tiles[2].(map[string]any)["caption"] != "в августе — 2 890 ₽" {
 		t.Fatal("tile calendar shifted", tiles)
 	}
 	if !strings.HasPrefix(screenBlock(r, "small_frequent").Data.AsMap()["description"].(string), "по августу ·") || !strings.HasSuffix(screenBlock(r, "regular_payments").Data.AsMap()["description"].(string), "с июня") {

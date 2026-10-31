@@ -20,7 +20,7 @@ func analyticsRow() []any {
 	amount := int64(0)
 	category, selection, name := "cat_refund", "s_fees", "Комиссии"
 	return []any{&key, true, instant(1), instant(20), instant(20), instant(30), int32(3), true, "Europe/Moscow", instant(21),
-		true, instant(1), instant(30), &coverage, instant(1), instant(20), &months, instant(21), []time.Time{*instant(3)}, []time.Time{*instant(4)}, &previous, &next, []byte(nil), []byte(nil), &version, &version,
+		true, instant(1), instant(30), &coverage, instant(1), instant(20), &months, instant(21), []time.Time{*instant(3)}, []time.Time{*instant(4)}, &previous, &next, []byte(nil), []byte(nil), &version, &version, []byte(nil),
 		&id, &version, &status, &amount, instant(1), instant(20), &reason, &required, &available, instant(10), instant(1), instant(20), &months,
 		instant(1), instant(30), &category, &kind, &mode, &selection, &name, []byte(`{"bank_fees":{}}`)}
 }

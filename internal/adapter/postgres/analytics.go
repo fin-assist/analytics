@@ -36,7 +36,17 @@ head AS MATERIALIZED (
            (SELECT min(n.period_key) FROM period_snapshot n
              WHERE n.user_id = s.user_id AND n.period_type = $2 AND n.period_key > c.period_key AND NOT n.removed) AS next,
            s.proven_revisions AS state_revisions,p.data_revisions AS snapshot_revisions,
-           s.calc_version AS state_version,p.calc_version AS snapshot_version
+           s.calc_version AS state_version,p.calc_version AS snapshot_version,
+           (SELECT jsonb_agg(jsonb_build_object(
+               'Key', m.period_key, 'Range', jsonb_build_object('Start', m.range_start, 'End', m.range_end),
+               'Coverage', m.coverage, 'DataFrom', m.data_from, 'DataTo', m.data_to,
+               'Version', m.calc_version, 'Revisions', m.data_revisions,
+               'Gaps', coalesce((SELECT jsonb_agg(jsonb_build_object('Start', g.gap_start, 'End', g.gap_end) ORDER BY g.ordinal)
+                   FROM period_gap g WHERE g.user_id = m.user_id AND g.period_type = m.period_type
+                     AND g.period_key = m.period_key AND g.transfer_mode = m.transfer_mode), '[]'::jsonb)
+           ) ORDER BY m.period_key)
+           FROM period_snapshot m
+           WHERE m.user_id = s.user_id AND m.period_type = 1 AND m.transfer_mode = $4 AND NOT m.removed) AS history
     FROM proven_state s CROSS JOIN chosen c
     LEFT JOIN period_snapshot p
            ON p.user_id = s.user_id AND p.period_type = $2 AND p.period_key = c.period_key AND p.transfer_mode = $4
@@ -67,6 +77,7 @@ type analyticsRead struct {
 	snapshot       *domain.Snapshot
 	selected       *string
 	previous, next *string
+	history        []byte
 }
 
 // errNoState is readAnalyticsSQL without a row: the user has no state (has_data = false).
@@ -97,7 +108,7 @@ func readAnalyticsRows(ctx context.Context, q querier, user string, key periodKe
 			&out.state.stale, &out.state.fullMonths, &out.state.recalculating, &out.state.timeZone,
 			&out.state.calculatedAt,
 			&hasSnapshot, &header.rangeStart, &header.rangeEnd, &header.coverage, &header.dataFrom, &header.dataTo,
-			&header.unreadLines, &header.calculatedAt, &gapStarts, &gapEnds, &out.previous, &out.next, &out.state.revisions, &header.revisions, &out.state.version, &header.version,
+			&header.unreadLines, &header.calculatedAt, &gapStarts, &gapEnds, &out.previous, &out.next, &out.state.revisions, &header.revisions, &out.state.version, &header.version, &out.history,
 			&metricID, &definitionVersion, &status, &m.valueMinor, &m.rangeStart, &m.rangeEnd,
 			&m.lockReason, &m.lockRequired, &m.lockAvailable, &m.lockAvailableFrom,
 			&m.basisStart, &m.basisEnd, &m.basisFullMonths,
@@ -149,7 +160,8 @@ func (r *Metrics) ReadAnalytics(ctx context.Context, user string, typ domain.Per
 	if err != nil {
 		return domain.AnalyticsData{}, err
 	}
-	return domain.AnalyticsData{State: &state, Snapshot: data.snapshot, Previous: data.previous, Next: data.next, SelectedKey: data.selected}, nil
+	return domain.AnalyticsData{State: &state, Snapshot: data.snapshot, Previous: data.previous, Next: data.next, SelectedKey: data.selected,
+		History: forecastHistory(data.history, state, data.snapshot)}, nil
 }
 
 func domainSnapshot(key periodKey, h headerRow, starts, ends []time.Time, rows []metricRow) (*domain.Snapshot, error) {
