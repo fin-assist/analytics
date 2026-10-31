@@ -151,7 +151,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 			}
 		}
 	}
-	got = read(&analyticsv1.GetAnalyticsRequest{Supports: []*commonv1.BlockSupport{{Type: "future", MaxVersion: 9}, {Type: "chart", MaxVersion: 0}}})
+	got = read(&analyticsv1.GetAnalyticsRequest{Supports: []*commonv1.BlockSupport{{Type: "future", MaxVersion: 9}}})
 	if len(got.Blocks) != 0 {
 		t.Fatal("unsupported blocks")
 	}

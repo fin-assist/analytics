@@ -36,6 +36,11 @@ func (h *analytics) GetAnalytics(ctx context.Context, req *analyticsv1.GetAnalyt
 	if mode != domain.TransferWith && mode != domain.TransferWithout {
 		return nil, validation("transfer_mode")
 	}
+	for _, support := range req.Supports {
+		if support.GetType() == "" || support.GetMaxVersion() <= 0 {
+			return nil, validation("supports")
+		}
+	}
 	if h.screen == nil || h.composer == nil {
 		return nil, errors.New("analytics: screen not wired")
 	}

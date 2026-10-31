@@ -93,7 +93,7 @@ func TestUnitUpsertRefusesEveryBrokenRule(t *testing.T) {
 		"calc_version zero":        func(u *Upsert) { u.Version = 0 },
 		"calc_version negative":    func(u *Upsert) { u.Version = -1 },
 		"period type unspecified":  func(u *Upsert) { first(u).Key.Type = 0 },
-		"period type unknown":      func(u *Upsert) { first(u).Key.Type = 4 },
+		"period type unknown":      func(u *Upsert) { first(u).Key.Type = 5 },
 		"transfer mode unset":      func(u *Upsert) { first(u).Key.Mode = 0 },
 		"transfer mode unknown":    func(u *Upsert) { first(u).Key.Mode = 3 },
 		"month 2026-9":             func(u *Upsert) { first(u).Key.Key = "2026-9" },
@@ -187,7 +187,7 @@ func TestUnitIncompletePeriods(t *testing.T) {
 }
 
 func TestUnitPeriodType(t *testing.T) {
-	for typ, name := range map[PeriodType]string{PeriodMonth: "month", PeriodQuarter: "quarter", PeriodYear: "year", 0: "unknown", 9: "unknown"} {
+	for typ, name := range map[PeriodType]string{PeriodMonth: "month", PeriodQuarter: "quarter", PeriodYear: "year", PeriodAllTime: "all_time", 0: "unknown", 9: "unknown"} {
 		if typ.String() != name {
 			t.Errorf("%d is %q, want %q", typ, typ.String(), name)
 		}
@@ -211,13 +211,14 @@ func FuzzUnitPeriodKeyAndTimeZone(f *testing.F) {
 	for _, seed := range []string{"2026-09", "2026-Q3", "2026", "2026-9", "../UTC", "Europe/Moscow", "", "Local"} {
 		f.Add(int32(1), seed)
 	}
+	f.Add(int32(4), "all_time")
 	f.Fuzz(func(t *testing.T, typ int32, key string) {
 		err := PeriodKey{Type: PeriodType(typ), Key: key}.Validate()
 		if err != nil && !errors.Is(err, ErrInvalid) {
 			t.Fatalf("error %v is not ErrInvalid", err)
 		}
 		if err == nil {
-			want := map[PeriodType]int{PeriodMonth: 7, PeriodQuarter: 7, PeriodYear: 4}[PeriodType(typ)]
+			want := map[PeriodType]int{PeriodMonth: 7, PeriodQuarter: 7, PeriodYear: 4, PeriodAllTime: 8}[PeriodType(typ)]
 			if len(key) != want {
 				t.Fatalf("accepted %q of type %d", key, typ)
 			}

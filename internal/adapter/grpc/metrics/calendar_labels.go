@@ -14,7 +14,7 @@ import (
 // periodCalendarBounds describes the civil period named by a key. It is used only
 // to check metadata and label a period; stored financial bounds are never replaced.
 func periodCalendarBounds(key domain.PeriodKey, zone *time.Location) (time.Time, time.Time, bool) {
-	if zone == nil || key.Validate() != nil {
+	if zone == nil || key.Type == domain.PeriodAllTime || key.Validate() != nil {
 		return time.Time{}, time.Time{}, false
 	}
 	year, _ := strconv.Atoi(key.Key[:4])
@@ -44,6 +44,9 @@ func profileCalendarMatches(key domain.PeriodKey, r *domain.TimeRange, profile *
 // boundaries agree with it. Rebuilding can retain a former IANA calendar even when
 // both endpoint offsets happen to match, so matching offsets alone is insufficient.
 func (p composition) preciseDays() bool {
+	if p.s.Key.Type == domain.PeriodAllTime {
+		return p.preciseAllTimeDays()
+	}
 	return p.s.State != nil && !p.s.State.Recalculating && profileCalendarMatches(p.s.Key.PeriodKey, &p.s.Range, p.zone)
 }
 
@@ -57,6 +60,9 @@ func (p composition) precisePointDays(point *analyticsv1.MonthlyPoint) bool {
 }
 
 func periodName(key domain.PeriodKey) string {
+	if key.Type == domain.PeriodAllTime {
+		return "всё время"
+	}
 	start, _, ok := periodCalendarBounds(key, time.UTC)
 	if !ok {
 		return "выбранный период"

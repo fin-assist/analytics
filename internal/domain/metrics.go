@@ -27,9 +27,10 @@ const (
 	PeriodMonth   PeriodType = 1
 	PeriodQuarter PeriodType = 2
 	PeriodYear    PeriodType = 3
+	PeriodAllTime PeriodType = 4
 )
 
-// String is the bounded metric label of the type (grpc-api.md 9): month, quarter, year.
+// String is the bounded metric label of the type (grpc-api.md 9).
 func (t PeriodType) String() string {
 	switch t {
 	case PeriodMonth:
@@ -38,12 +39,16 @@ func (t PeriodType) String() string {
 		return "quarter"
 	case PeriodYear:
 		return "year"
+	case PeriodAllTime:
+		return "all_time"
 	}
 	return "unknown"
 }
 
 // Known reports whether t is a type this release stores.
-func (t PeriodType) Known() bool { return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear }
+func (t PeriodType) Known() bool {
+	return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear || t == PeriodAllTime
+}
 
 // TransferMode is the number of finassist.common.v1.TransferMode.
 type TransferMode int32
@@ -90,6 +95,7 @@ var periodKeyGrammar = map[PeriodType]*regexp.Regexp{
 	PeriodMonth:   regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`),
 	PeriodQuarter: regexp.MustCompile(`^[0-9]{4}-Q[1-4]$`),
 	PeriodYear:    regexp.MustCompile(`^[0-9]{4}$`),
+	PeriodAllTime: regexp.MustCompile(`^all_time$`),
 }
 
 // Validate checks the type and the exact grammar of the key: on it rests the equality of
