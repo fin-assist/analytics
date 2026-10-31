@@ -281,3 +281,23 @@ func TestIntegrationListPeriodsOverTransport(t *testing.T) {
 		t.Fatalf("cancelled call: %v", err)
 	}
 }
+
+func TestIntegrationLegacyNonCivilStateKeepsCalendarReads(t *testing.T) {
+	tr := startTransport(t)
+	if _, err := tr.ingest.UpsertUserMetrics(t.Context(), batch(alice, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tr.db.Primary().Exec(t.Context(), `UPDATE user_data_state SET data_to=data_to+interval '1 hour' WHERE user_id=$1`, alice); err != nil {
+		t.Fatal(err)
+	}
+	ctx := metadata.AppendToOutgoingContext(t.Context(), "test-user", alice)
+	for _, tc := range []struct {
+		typ commonv1.PeriodType
+		key string
+	}{{1, "2026-09"}, {2, "2026-Q3"}, {3, "2026"}, {4, "all_time"}} {
+		got, err := tr.analytics.GetAnalytics(ctx, &analyticsv1.GetAnalyticsRequest{Period: tc.typ, PeriodKey: proto.String(tc.key)})
+		if err != nil || !got.GetHasData() {
+			t.Fatalf("legacy state broke %s: %v %v", tc.key, got, err)
+		}
+	}
+}

@@ -88,7 +88,7 @@ func TestUnitCivilDayStartHandlesMissingDatesAndInvalidInputs(t *testing.T) {
 	}
 }
 
-func TestUnitStateAcceptsOnlyFirstRealCoveredDayEnd(t *testing.T) {
+func TestUnitStateIngestAcceptsOnlyFirstRealCoveredDayEnd(t *testing.T) {
 	for _, tc := range []struct{ zone, end string }{
 		{"UTC", "2026-10-31T00:00:00Z"},
 		{"America/Sao_Paulo", "2018-11-04T01:00:00-02:00"},
@@ -102,13 +102,16 @@ func TestUnitStateAcceptsOnlyFirstRealCoveredDayEnd(t *testing.T) {
 			from := end.AddDate(0, -1, 0)
 			stale := end.AddDate(0, 0, 14)
 			state := &State{HasData: true, DataFrom: &from, DataTo: &end, LastOperationAt: &from, StaleAfter: &stale, CalculatedAt: &end, TimeZone: tc.zone}
-			if err = state.Validate(); err != nil {
+			if err = (Upsert{UserID: "01a107db-ae80-7b07-b8a1-000000000001", Version: 1, State: state}).Validate(); err != nil {
 				t.Fatal(err)
 			}
 			later := end.Add(time.Hour)
 			state.DataTo = &later
-			if err = state.Validate(); !errors.Is(err, ErrInvalid) {
+			if err = (Upsert{UserID: "01a107db-ae80-7b07-b8a1-000000000001", Version: 1, State: state}).Validate(); !errors.Is(err, ErrInvalid) {
 				t.Fatalf("non-first day instant accepted: %v", err)
+			}
+			if err = state.Validate(); err != nil {
+				t.Fatalf("legacy read validation adopted ingest-only rule: %v", err)
 			}
 		})
 	}
@@ -139,5 +142,25 @@ func TestUnitRollingPeriodMetadataUsesExactBoundsAndRevisionIntersection(t *test
 	}
 	if !span.SameBounds(&TimeRange{Start: &from, End: &end}) {
 		t.Fatal("equal bounds rejected")
+	}
+}
+
+func TestUnitRollingPeriodMetadataSkipsStaleHigherPriorityHeader(t *testing.T) {
+	oldStart := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
+	oldEnd := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	state := &State{DataFrom: &oldStart, DataTo: &end, TimeZone: "UTC", Revisions: Revisions{"uploads": 2, "categories": 2}}
+	stale := &Snapshot{Range: &TimeRange{Start: &oldStart, End: &oldEnd}, Coverage: CoverageComplete, Revisions: Revisions{"uploads": 1, "categories": 2}}
+	current := &Snapshot{Range: &TimeRange{Start: &start, End: &end}, Coverage: CoverageComplete, Revisions: Revisions{"uploads": 2, "categories": 1}}
+	for _, headers := range [][]*Snapshot{{stale, current}, {current, stale}, {nil, current}} {
+		got, err := RollingPeriods(PeriodRollingQuarter, state, headers...)
+		if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != CoverageComplete || len(got.Revisions) != 1 || got.Revisions["uploads"] != 2 {
+			t.Fatalf("current header ignored: %+v %v", got, err)
+		}
+	}
+	got, err := RollingPeriods(PeriodRollingQuarter, state, stale, stale)
+	if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != CoveragePartial || len(got.Revisions) != 2 || got.Revisions["categories"] != 2 {
+		t.Fatalf("stale headers certified: %+v %v", got, err)
 	}
 }

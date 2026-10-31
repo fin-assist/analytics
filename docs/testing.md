@@ -88,3 +88,9 @@ Integration дополнительно проверяет WITHOUT-first при �
 снимка, нового state перед старым снимком и отсутствующего снимка. Unit проверяет query/scan/iteration failures
 и повреждённую provenance. `TestAPIInvalidStateDayEndIsRejectedAtomically` доказывает отказ всего ingest без
 изменения прежнего ответа; unit и прежний midnight-gap API подтверждают первый реальный civil-момент в 01:00.
+
+Повторное ревью FIN-411: `TestAPILegacyNonCivilStateKeepsCalendarAndAllTimeReads` и
+`TestIntegrationLegacyNonCivilStateKeepsCalendarReads` напрямую меняют сохранённый `data_to` на +1 час:
+calendar/all_time остаются читаемыми, ingest-only gate и rolling guard проверяются отдельно.
+`TestAPIRollingListSkipsStaleWithoutForCurrentWith`, одноимённый PostgreSQL integration и domain/row unit
+проверяют старый WITHOUT + новый WITH, точное пересечение ревизий и fallback partial/state при двух старых.

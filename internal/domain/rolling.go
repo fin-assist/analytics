@@ -40,7 +40,7 @@ func (r *TimeRange) SameBounds(other *TimeRange) bool {
 
 // RollingPeriods resolves list metadata from one coherent state/header read.
 // It shares the rolling bounds and exact snapshot retention rule with screen selection.
-func RollingPeriods(typ PeriodType, state *State, snapshot *Snapshot) (Periods, error) {
+func RollingPeriods(typ PeriodType, state *State, snapshots ...*Snapshot) (Periods, error) {
 	if state == nil {
 		return Periods{}, nil
 	}
@@ -57,9 +57,13 @@ func RollingPeriods(typ PeriodType, state *State, snapshot *Snapshot) (Periods, 
 		return Periods{}, err
 	}
 	coverage := CoveragePartial
-	if snapshot != nil && span.SameBounds(snapshot.Range) {
+	for _, snapshot := range snapshots {
+		if snapshot == nil || !span.SameBounds(snapshot.Range) {
+			continue
+		}
 		coverage = snapshot.Coverage
 		out.Revisions = snapshot.Revisions.Intersect(state.Revisions)
+		break
 	}
 	out.Items = []PeriodItem{{Key: typ.String(), Start: *span.Start, End: *span.End, Coverage: coverage}}
 	return out, nil

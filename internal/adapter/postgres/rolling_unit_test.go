@@ -86,3 +86,19 @@ func TestUnitRollingListUsesCoherentHeaderAndRejectsBrokenMetadata(t *testing.T)
 		})
 	}
 }
+
+func TestUnitRollingListCollectsBothHeadersBeforeDomainSelection(t *testing.T) {
+	stale, current := rollingListRow(), rollingListRow()
+	stale[5] = instant(1)
+	tx := &scriptedTx{rows: map[string]*scriptedRows{"unknown": {values: [][]any{stale, current}}}}
+	repo, db := unitRepository(tx)
+	var got domain.Periods
+	err := db.Run(t.Context(), func(ctx context.Context) error {
+		var err error
+		got, err = repo.ListPeriods(ctx, "user", domain.PeriodRollingQuarter)
+		return err
+	})
+	if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != domain.CoverageComplete || len(got.Revisions) != 1 || got.Revisions["uploads"] != 1 {
+		t.Fatalf("second coherent header lost: %+v %v", got, err)
+	}
+}

@@ -7,8 +7,8 @@ import (
 	"github.com/fin-assist/analytics/internal/domain"
 )
 
-// rollingPeriodsSQL reads one state/available-header snapshot. ListPeriods has no
-// transfer mode: use the same WITHOUT-first ordering as listPeriodsSQL. The proof
+// rollingPeriodsSQL reads one state/available-headers snapshot. ListPeriods has no
+// transfer mode: return both headers in WITHOUT-first order for domain matching. The proof
 // still checks every header/removal, including a partially delivered other mode.
 const rollingPeriodsSQL = `
 WITH proven_state AS MATERIALIZED (
@@ -22,12 +22,11 @@ SELECT s.time_zone,s.data_from,s.data_to,s.proven_revisions,s.calc_version,
        p.range_start,p.range_end,p.coverage,p.data_revisions,p.calc_version
 FROM proven_state s
 LEFT JOIN LATERAL (
-    SELECT n.range_start,n.range_end,n.coverage,n.data_revisions,n.calc_version
+    SELECT n.transfer_mode,n.range_start,n.range_end,n.coverage,n.data_revisions,n.calc_version
     FROM period_snapshot n
     WHERE n.user_id = s.user_id AND n.period_type = $2 AND n.period_key = $3 AND NOT n.removed
-    ORDER BY n.transfer_mode DESC
-    LIMIT 1
-) p ON true`
+) p ON true
+ORDER BY p.transfer_mode DESC`
 
 // rollingPeriods never combines a new coverage anchor with an older singleton header.
 func (r *Metrics) rollingPeriods(ctx context.Context, user string, typ domain.PeriodType) (domain.Periods, error) {
@@ -35,21 +34,26 @@ func (r *Metrics) rollingPeriods(ctx context.Context, user string, typ domain.Pe
 	if err != nil {
 		return domain.Periods{}, err
 	}
-	periods, err := domain.RollingPeriods(typ, data.State, data.Snapshot)
+	periods, err := domain.RollingPeriods(typ, data.state, data.snapshots...)
 	if err != nil {
 		return domain.Periods{}, errors.New("analytics: invalid stored rolling boundary")
 	}
 	return periods, nil
 }
 
+type rollingPeriodRead struct {
+	state     *domain.State
+	snapshots []*domain.Snapshot
+}
+
 // Only list metadata is read; financial payloads remain specific to GetAnalytics' mode.
-func readRollingPeriod(ctx context.Context, q querier, user string, typ domain.PeriodType) (domain.AnalyticsData, error) {
+func readRollingPeriod(ctx context.Context, q querier, user string, typ domain.PeriodType) (rollingPeriodRead, error) {
 	rows, err := q.Query(ctx, rollingPeriodsSQL, user, int16(typ), typ.String())
 	if err != nil {
-		return domain.AnalyticsData{}, err
+		return rollingPeriodRead{}, err
 	}
 	defer rows.Close()
-	var out domain.AnalyticsData
+	var out rollingPeriodRead
 	for rows.Next() {
 		state := &domain.State{}
 		header := &domain.Snapshot{Range: &domain.TimeRange{}}
@@ -58,25 +62,25 @@ func readRollingPeriod(ctx context.Context, q querier, user string, typ domain.P
 		var coverage *int16
 		if err = rows.Scan(&state.TimeZone, &state.DataFrom, &state.DataTo, &stateJSON, &stateVersion,
 			&header.Range.Start, &header.Range.End, &coverage, &headerJSON, &headerVersion); err != nil {
-			return domain.AnalyticsData{}, err
+			return rollingPeriodRead{}, err
 		}
 		state.Revisions, err = revisionsFromJSON(stateJSON, stateVersion)
 		if err != nil {
-			return domain.AnalyticsData{}, err
+			return rollingPeriodRead{}, err
 		}
-		out.State = state
+		out.state = state
 		if headerVersion == nil {
 			continue
 		}
 		if header.Range.Start == nil || header.Range.End == nil || coverage == nil {
-			return domain.AnalyticsData{}, errBrokenHeader
+			return rollingPeriodRead{}, errBrokenHeader
 		}
 		header.Coverage = domain.Coverage(*coverage)
 		header.Revisions, err = revisionsFromJSON(headerJSON, headerVersion)
 		if err != nil {
-			return domain.AnalyticsData{}, err
+			return rollingPeriodRead{}, err
 		}
-		out.Snapshot = header
+		out.snapshots = append(out.snapshots, header)
 	}
 	return out, rows.Err()
 }

@@ -226,7 +226,7 @@ func (u Upsert) Validate() error {
 		return invalid("calc_version %d is not positive", u.Version)
 	}
 	if u.State != nil {
-		if err := u.State.Validate(); err != nil {
+		if err := u.State.ValidateIngest(); err != nil {
 			return err
 		}
 	}
@@ -399,7 +399,13 @@ func (s *State) Validate() error {
 	if s.FullMonths < 0 {
 		return invalid("state full_months %d", s.FullMonths)
 	}
-	if err := ValidateTimeZone(s.TimeZone); err != nil {
+	return ValidateTimeZone(s.TimeZone)
+}
+
+// ValidateIngest applies current civil-day rules only to a newly received state.
+// Existing financial snapshots remain readable after legacy writes or tzdata changes.
+func (s *State) ValidateIngest() error {
+	if err := s.Validate(); err != nil {
 		return err
 	}
 	if s.DataTo != nil {

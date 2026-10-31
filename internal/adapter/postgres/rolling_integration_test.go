@@ -4,11 +4,13 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
 	commonv1 "github.com/fin-assist/contracts/gen/go/finassist/common/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/fin-assist/analytics/internal/domain"
 )
@@ -222,4 +224,82 @@ func TestIntegrationRollingListCertifiesOnlyCurrentHeaderRevisions(t *testing.T)
 		t.Fatal(err)
 	}
 	check(domain.CoveragePartial, domain.Revisions{"uploads": 2, "categories": 1, "time_zone": 1})
+}
+
+func TestIntegrationRollingListSkipsStaleWithoutForCurrentWith(t *testing.T) {
+	pool := openDB(t)
+	user := newUser(414)
+	raw, err := os.ReadFile("../../../testdata/rolling.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &analyticsv1.UpsertUserMetricsRequest{}
+	if err = protojson.Unmarshal(raw, req); err != nil {
+		t.Fatal(err)
+	}
+	state := validState()
+	state.dataFrom = ptr(req.State.DataFrom.AsTime())
+	state.dataTo = ptr(req.State.DataTo.AsTime())
+	state.lastOperation = ptr(req.State.LastOperationAt.AsTime())
+	state.calculatedAt = ptr(req.State.CalculatedAt.AsTime())
+	state.revisions = revisionsJSON(domain.Revisions{"uploads": 1, "categories": 1, "time_zone": 1})
+	if _, err = upsertState(t.Context(), pool, user, 4, state); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range req.Periods {
+		p.Bounds.Coverage = commonv1.Coverage_COVERAGE_COMPLETE
+		p.Bounds.Gaps = nil
+		p.Metrics = nil
+	}
+	if _, err = upsertProto(t.Context(), pool, user, 4, req.Periods, nil); err != nil {
+		t.Fatal(err)
+	}
+	end := state.dataTo.AddDate(0, 0, 1)
+	state.dataTo = &end
+	state.revisions = revisionsJSON(domain.Revisions{"uploads": 2, "categories": 2, "time_zone": 1})
+	if _, err = upsertState(t.Context(), pool, user, 5, state); err != nil {
+		t.Fatal(err)
+	}
+	var current []*analyticsv1.PeriodSnapshot
+	for _, p := range req.Periods {
+		if p.TransferMode != commonv1.TransferMode_TRANSFER_MODE_WITH {
+			continue
+		}
+		start := "2026-08-01T00:00:00+03:00"
+		if p.Period == commonv1.PeriodType_PERIOD_TYPE_ROLLING_YEAR {
+			start = "2025-11-01T00:00:00+03:00"
+		}
+		at, err := time.Parse(time.RFC3339, start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.Range.Start = timestamppb.New(at)
+		p.Range.End = timestamppb.New(end)
+		p.Bounds.DataFrom = p.Range.Start
+		p.Bounds.DataTo = timestamppb.New(end.Add(-time.Second))
+		p.DataRevisions = []*commonv1.DataRevision{{Code: "uploads", Value: 2}, {Code: "categories", Value: 1}, {Code: "time_zone", Value: 1}}
+		current = append(current, p)
+	}
+	if _, err = upsertProto(t.Context(), pool, user, 5, current, nil); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	for _, p := range current {
+		got, err := repo.ListPeriods(t.Context(), user, domain.PeriodType(p.Period))
+		if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != domain.CoverageComplete || !got.Items[0].Start.Equal(p.Range.Start.AsTime()) || !got.Items[0].End.Equal(end) || !reflect.DeepEqual(got.Revisions, domain.Revisions{"uploads": 2, "time_zone": 1}) {
+			t.Fatalf("stale WITHOUT hid current WITH: %+v %v", got, err)
+		}
+	}
+	// With both headers stale, keep the state-only conservative result.
+	end = end.AddDate(0, 0, 1)
+	state.dataTo = &end
+	if _, err = upsertState(t.Context(), pool, user, 6, state); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range current {
+		got, err := repo.ListPeriods(t.Context(), user, domain.PeriodType(p.Period))
+		if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != domain.CoveragePartial || !reflect.DeepEqual(got.Revisions, domain.Revisions{"uploads": 2, "categories": 2, "time_zone": 1}) {
+			t.Fatalf("stale headers certified: %+v %v", got, err)
+		}
+	}
 }
