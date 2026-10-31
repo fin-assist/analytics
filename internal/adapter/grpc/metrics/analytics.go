@@ -65,8 +65,9 @@ func (h *analytics) GetAnalytics(ctx context.Context, req *analyticsv1.GetAnalyt
 	return response, nil
 }
 
+// A registry validation needs a violation reason for the BFF to preserve its HTTP 400 status.
 func validation(field string) error {
-	return finerr.ValidationError(&errdetails.BadRequest_FieldViolation{Field: field, Description: "invalid analytics parameter"})
+	return finerr.ValidationError(&errdetails.BadRequest_FieldViolation{Field: field, Reason: "INVALID_FORMAT", Description: "invalid analytics parameter"})
 }
 
 func timestamp(t *time.Time) *timestamppb.Timestamp {
