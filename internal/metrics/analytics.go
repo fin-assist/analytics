@@ -100,7 +100,7 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 		out.History = nil
 	}
 	out.Current = selection.current(now, out.Range)
-	if typ.Rolling() {
+	if typ.Rolling() || typ == domain.PeriodAllTime {
 		out.Previous, out.Next, out.History = nil, nil, nil
 	}
 	out.Stale = data.State.StaleAfter != nil && !now.Before(*data.State.StaleAfter)
@@ -108,6 +108,12 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 }
 
 func exactKey(typ domain.PeriodType, key string) (string, error) {
+	if typ == domain.PeriodAllTime {
+		if err := (domain.PeriodKey{Type: typ, Key: key}).Validate(); err != nil {
+			return "", err
+		}
+		return key, nil
+	}
 	for _, input := range []domain.PeriodType{domain.PeriodMonth, domain.PeriodQuarter, domain.PeriodYear} {
 		if (domain.PeriodKey{Type: input, Key: key}).Validate() != nil {
 			continue

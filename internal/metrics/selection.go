@@ -32,6 +32,22 @@ func (c calendarSelection) current(now time.Time, r domain.TimeRange) bool {
 }
 func (c calendarSelection) retain(_ *domain.TimeRange, _ domain.TimeRange) bool { return true }
 
+// allTimeSelection keeps persisted facts in their original coverage envelope during rebuilds.
+type allTimeSelection struct{}
+
+func (allTimeSelection) defaultKey() *string { key := "all_time"; return &key }
+func (allTimeSelection) exact(key string) (string, error) {
+	return key, (domain.PeriodKey{Type: domain.PeriodAllTime, Key: key}).Validate()
+}
+func (allTimeSelection) validateKey(key string) error {
+	return (domain.PeriodKey{Type: domain.PeriodAllTime, Key: key}).Validate()
+}
+func (allTimeSelection) bounds(_ string, state *domain.State, _ *time.Location) (time.Time, time.Time, error) {
+	return *state.DataFrom, *state.DataTo, nil
+}
+func (allTimeSelection) current(time.Time, domain.TimeRange) bool        { return false }
+func (allTimeSelection) retain(*domain.TimeRange, domain.TimeRange) bool { return true }
+
 type rollingSelection struct{ typ domain.PeriodType }
 
 func (r rollingSelection) defaultKey() *string { key := r.typ.String(); return &key }
@@ -55,6 +71,9 @@ func (r rollingSelection) retain(stored *domain.TimeRange, expected domain.TimeR
 }
 
 func selectionFor(typ domain.PeriodType) periodSelection {
+	if typ == domain.PeriodAllTime {
+		return allTimeSelection{}
+	}
 	if typ.Rolling() {
 		return rollingSelection{typ: typ}
 	}

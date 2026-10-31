@@ -27,11 +27,12 @@ const (
 	PeriodMonth          PeriodType = 1
 	PeriodQuarter        PeriodType = 2
 	PeriodYear           PeriodType = 3
+	PeriodAllTime        PeriodType = 4
 	PeriodRollingYear    PeriodType = 5
 	PeriodRollingQuarter PeriodType = 6
 )
 
-// String is the bounded metric label of a known calendar or rolling period.
+// String is the bounded metric label of a known period.
 func (t PeriodType) String() string {
 	switch t {
 	case PeriodMonth:
@@ -40,6 +41,8 @@ func (t PeriodType) String() string {
 		return "quarter"
 	case PeriodYear:
 		return "year"
+	case PeriodAllTime:
+		return "all_time"
 	case PeriodRollingYear:
 		return "rolling_year"
 	case PeriodRollingQuarter:
@@ -50,7 +53,7 @@ func (t PeriodType) String() string {
 
 // Known reports whether t is a type this release stores.
 func (t PeriodType) Known() bool {
-	return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear || t.Rolling()
+	return t == PeriodMonth || t == PeriodQuarter || t == PeriodYear || t == PeriodAllTime || t.Rolling()
 }
 
 // TransferMode is the number of finassist.common.v1.TransferMode.
@@ -98,6 +101,7 @@ var periodKeyGrammar = map[PeriodType]*regexp.Regexp{
 	PeriodMonth:          regexp.MustCompile(`^[0-9]{4}-(0[1-9]|1[0-2])$`),
 	PeriodQuarter:        regexp.MustCompile(`^[0-9]{4}-Q[1-4]$`),
 	PeriodYear:           regexp.MustCompile(`^[0-9]{4}$`),
+	PeriodAllTime:        regexp.MustCompile(`^all_time$`),
 	PeriodRollingYear:    regexp.MustCompile(`^rolling_year$`),
 	PeriodRollingQuarter: regexp.MustCompile(`^rolling_quarter$`),
 }

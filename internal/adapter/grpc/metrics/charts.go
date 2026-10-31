@@ -51,9 +51,9 @@ func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, err
 				return nil, err
 			}
 			bar["range"] = rangeJSON(point.CalculationRange, p.zone)
-			if point.GetBounds().GetCoverage() != commonv1.Coverage_COVERAGE_NO_DATA {
-				bar["action"] = map[string]any{"type": "select_analytics_period", "period": "month", "date": point.Month}
-			}
+		}
+		if action := monthSelection(point); action != nil {
+			bar["action"] = map[string]any{"type": action.Type, "period": "month", "date": action.GetPeriodKey()}
 		}
 		points = append(points, bar)
 		v := "нет данных"
@@ -63,7 +63,7 @@ func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, err
 		alt = append(alt, p.chartMonthName(point.Month, monthNom)+" "+v)
 	}
 	d := map[string]any{"kind": "bar", "value_kind": "amount", "points": points, "notes": p.chartNotes(chart.Points)}
-	if p.s.Key.Type != domain.PeriodYear && !p.s.Key.Type.Rolling() && len(points) > 0 {
+	if p.s.Key.Type != domain.PeriodYear && p.s.Key.Type != domain.PeriodAllTime && !p.s.Key.Type.Rolling() && len(points) > 0 {
 		d["highlight_index"] = len(points) - 1
 	}
 	b.AltText = ptr(title(id) + ": " + strings.Join(alt, ", "))
@@ -175,7 +175,7 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 		if len(parts) > 0 {
 			notes = append(notes, map[string]any{"text": strings.Join(parts, ". "), "tone": "muted"})
 		}
-	} else {
+	} else if p.s.Key.Type != domain.PeriodAllTime {
 		typical, err := p.get("tiles.expense.typical")
 		if err == nil && ready(typical) && typical.ValueMinor != nil {
 			text := "Обычно около " + money(typical.GetValueMinor())
@@ -188,11 +188,14 @@ func (p composition) chartNotes(points []*analyticsv1.MonthlyPoint) []any {
 	return notes
 }
 
-// chartMonthName makes repeated edge months distinguishable across years.
-func (p composition) chartMonthName(key string, names [12]string) string {
-	label := monthName(key, names)
-	if p.s.Key.Type.Rolling() && len(key) >= 4 {
-		label += " " + key[:4]
+// Point actions are typed contract actions and are never added by the shared balance-point renderer.
+func monthSelection(point *analyticsv1.MonthlyPoint) *commonv1.BlockAction {
+	coverage := point.GetBounds().GetCoverage()
+	if coverage != commonv1.Coverage_COVERAGE_COMPLETE && coverage != commonv1.Coverage_COVERAGE_PARTIAL {
+		return nil
 	}
-	return label
+	if (domain.PeriodKey{Type: domain.PeriodMonth, Key: point.GetMonth()}).Validate() != nil {
+		return nil
+	}
+	return &commonv1.BlockAction{Type: "select_analytics_period", Period: ptr(commonv1.PeriodType_PERIOD_TYPE_MONTH), PeriodKey: ptr(point.Month)}
 }

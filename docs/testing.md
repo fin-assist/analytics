@@ -62,3 +62,21 @@ DST-регрессии отдельно проверяют реальный ис
 Порядок примечаний в пустых текстах проверяется точными строками для none у expense_categories, income_categories и bank_fees: завершённое «за <период> нет» предшествует «неполные данные»/«идёт пересчёт»/«сохранённый расчёт». Unit включает обычный точный календарь, integration/API — существующий none-сценарий с четырьмя сочетаниями partial/complete и recalculating/retained. Для этой последующей текстовой правки локально выполнены целевые unit/integration/API и lint; полный замер выше относится к указанному 34952e2, новый SHA перепроверяется CI.
 
 FIN-391: unit-регрессия проводит три несовместимые пары `month+2026`, `quarter+2026`, `month+2026-Q3` через настоящий Screen.Get и gRPC-handler с fake storage, затем проверяет штатный `finerr.ToREST` из pinned contracts/gen/go v0.7.0. До исправления все три ошибки имели gRPC InvalidArgument, но отвергались ToREST из-за пустого BadRequest.reason. Component integration использует отдельную сборку adapter/usecase/реального PostgreSQL и bufconn; API независимо использует app/apitest с production interceptors/access/tombstones. Проверены поле date, INVALID_FORMAT, HTTP400 registry mapping, неизвестный ListPeriods.period и корректные ключи с разрешённым укрупнением.
+
+
+FIN-398/400/403: синтетический `testdata/all_time.json` содержит точные покрытые дни декабря/января/октября,
+нулевой полный январь и восемь gap-месяцев, оба режима и только семь разрешённых семейств метрик.
+Unit отдельно проверяет ключ/диапазон/точность пояса, v1→v2 без изменения сумм/статусов/фильтров,
+zero/negative/safe-max/locked, ранний и stale режимы, empty groups и каноническую валидацию supports.
+Независимый adapter/usecase/PostgreSQL transport проверяет хранение/список обоих режимов, stale replay/removal
+и состояние до первого снимка; полная API-сборка независимо проверяет authentication/tenant/tombstone,
+выбор версии и действия covered/zero/gap. Обычный текущий месяц с прогнозом и пустой календарный период
+проверены на integration/API уровнях отдельно от all_time. Общие тесты транзакционной конкурентности,
+отказа БД и per-block timeout продолжают действовать: схема/SQL/wiring/политика доступа не менялись.
+
+FIN-411 после объединения PR51: `TestAPICombinedCalendarAllTimeAndRollingKeepTheirRangesAndFacts`
+пишет календарные, all_time и rolling снимки одного пользователя в один PostgreSQL и читает оба режима с
+`tile_group@1/@2`. Проверяются точные singleton-ключи, чужие ключи, диапазоны/навигация, неизменность финансовых
+значений, статусов, locks и действий при переключении групп. `TestUnitPeriodSelectionsKeepCalendarAndSingletonSemantics`
+проверяет все шесть типов через общий интерфейс стратегий. All-time state fallback/retained-range регрессии
+предшествующего PR сохранены; assistant chips запрещает BFF, RPC-чтение assistant остаётся разрешённым по контракту.

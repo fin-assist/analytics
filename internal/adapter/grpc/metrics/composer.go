@@ -43,9 +43,10 @@ func NewComposer(reg prometheus.Registerer) (*Composer, error) {
 }
 
 type composition struct {
-	s       domain.Analytics
-	zone    *time.Location
-	metrics map[string]domain.Metric
+	s           domain.Analytics
+	zone        *time.Location
+	metrics     map[string]domain.Metric
+	tileVersion int32
 }
 
 func (p composition) get(id string) (*analyticsv1.Metric, error) {
@@ -64,6 +65,10 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 		return nil, err
 	}
 	p := composition{s: s, zone: zone, metrics: map[string]domain.Metric{}}
+	p.tileVersion = 1
+	if supportedVersion("tile_group", supports) >= 2 {
+		p.tileVersion = 2
+	}
 	if s.Snapshot != nil {
 		for _, m := range s.Snapshot.Metrics {
 			p.metrics[m.ID] = m
@@ -73,6 +78,10 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 	if s.Key.Type.Rolling() && s.Snapshot == nil {
 		// Missing delivery is unknown, not evidence of an uncovered period.
 		bounds.Coverage = commonv1.Coverage_COVERAGE_PARTIAL
+	}
+	if s.Key.Type == domain.PeriodAllTime {
+		bounds = &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_PARTIAL,
+			DataFrom: timestamp(s.State.DataFrom), DataTo: timestamp(ptr(s.State.DataTo.Add(-time.Nanosecond)))}
 	}
 	state := &analyticsv1.ScreenState{Stale: s.Stale, LastOperationAt: timestamp(s.State.LastOperationAt), DataFrom: timestamp(s.State.DataFrom), DataTo: timestamp(s.State.DataTo), FullMonths: s.State.FullMonths, CalculatedAt: timestamp(s.State.CalculatedAt), Recalculating: s.State.Recalculating}
 	if snap := s.Snapshot; snap != nil {
@@ -93,7 +102,7 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 	if s.Key.Type == domain.PeriodMonth {
 		ids = append(ids, "heading", "regular_payments", "notable_spending", "bank_fees", "small_frequent")
 	}
-	if s.Key.Type != domain.PeriodYear && !s.Key.Type.Rolling() {
+	if s.Key.Type != domain.PeriodYear && s.Key.Type != domain.PeriodAllTime && !s.Key.Type.Rolling() {
 		ids = append(ids, "balance")
 	}
 	available, attempted := 0, 0
@@ -112,7 +121,7 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 		}
 		blocks, err := guardBlock(ctx, func(ctx context.Context) ([]*commonv1.Block, error) { return p.build(ctx, id) })
 		if err != nil {
-			blocks = []*commonv1.Block{unavailableBlock(id)}
+			blocks = []*commonv1.Block{p.unavailable(id)}
 		}
 		if id != "heading" {
 			attempted++
@@ -142,15 +151,20 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 }
 
 func compatible(typ string, supports []*commonv1.BlockSupport) bool {
+	return supportedVersion(typ, supports) >= 1
+}
+
+func supportedVersion(typ string, supports []*commonv1.BlockSupport) int32 {
 	if len(supports) == 0 {
-		return true
+		return 1
 	}
+	var version int32
 	for _, s := range supports {
-		if s.GetType() == typ && s.GetMaxVersion() >= 1 {
-			return true
+		if s.GetType() == typ && s.GetMaxVersion() > version {
+			version = s.GetMaxVersion()
 		}
 	}
-	return false
+	return version
 }
 
 type blockResult struct {
@@ -286,7 +300,7 @@ func safeNumbers(v any) error {
 }
 
 func (p composition) early() bool {
-	if p.s.Key.Type.Rolling() {
+	if p.s.Key.Type == domain.PeriodAllTime || p.s.Key.Type.Rolling() {
 		return false
 	}
 	if p.s.Rollover {
@@ -446,10 +460,20 @@ func (p composition) tile(id, label string, m *analyticsv1.Metric, caption strin
 
 func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	if p.s.Snapshot == nil && !p.s.Key.Type.Rolling() {
+		if p.s.Key.Type == domain.PeriodAllTime {
+			return p.unavailable("tiles"), nil
+		}
 		payload, err := data(map[string]any{"tiles": []any{}})
-		return &commonv1.Block{Id: "tiles", Type: "tile_group", V: 1, Status: "none", Data: payload, EmptyText: ptr("За этот период данных нет"), AltText: ptr("За этот период данных нет")}, err
+		b := &commonv1.Block{Id: "tiles", Type: "tile_group", V: 1, Status: "none", Data: payload, EmptyText: ptr("За этот период данных нет"), AltText: ptr("За этот период данных нет")}
+		if err == nil {
+			err = p.groupTiles(b)
+		}
+		return b, err
 	}
-	ids := []string{"tiles.balance", "tiles.expense", "tiles.daily_expense", "tiles.income", "tiles.forecast", "tiles.daily_expense.comparison"}
+	ids := []string{"tiles.balance", "tiles.expense", "tiles.daily_expense", "tiles.income"}
+	if p.s.Key.Type != domain.PeriodAllTime && !p.s.Key.Type.Rolling() {
+		ids = append(ids, "tiles.forecast", "tiles.daily_expense.comparison")
+	}
 	values := map[string]*analyticsv1.Metric{}
 	for _, id := range ids {
 		m, err := p.get(id)
@@ -470,7 +494,7 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	actual := p.tile("expense", "Расходы", expense, p.caption())
 	var forecastTile map[string]any
 	forecast := values["tiles.forecast"]
-	if p.s.Current && !p.s.Stale && forecast.GetLock().GetReason() != analyticsv1.LockReason_LOCK_REASON_STALE_DATA {
+	if p.s.Key.Type != domain.PeriodAllTime && p.s.Current && !p.s.Stale && forecast.GetLock().GetReason() != analyticsv1.LockReason_LOCK_REASON_STALE_DATA {
 		label := "Прогноз расходов"
 		if p.s.Key.Type == domain.PeriodYear {
 			label = "Прогноз на год"
@@ -522,6 +546,9 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	var err error
 	b.Data, err = data(map[string]any{"tiles": tiles})
 	if err != nil {
+		return nil, err
+	}
+	if err := p.groupTiles(b); err != nil {
 		return nil, err
 	}
 	return b, ctx.Err()
