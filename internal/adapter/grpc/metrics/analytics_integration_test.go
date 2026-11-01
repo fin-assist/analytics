@@ -81,6 +81,9 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Fatalf("screen header %+v", got)
 	}
 	tiles := screenBlock(got, "tiles").Data.AsMap()["tiles"].([]any)
+	if tiles[0].(map[string]any)["caption"] != "46% дохода" {
+		t.Fatal("balance caption", tiles[0])
+	}
 	if tiles[0].(map[string]any)["value"] != float64(7258000) || tiles[1].(map[string]any)["id"] != "expense" || tiles[4].(map[string]any)["id"] != "forecast" || tiles[2].(map[string]any)["value"] != float64(337280) || tiles[3].(map[string]any)["show_plus"] != true {
 		t.Fatal(tiles)
 	}
@@ -192,6 +195,12 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		}
 		if tc.typ == 3 && screenBlock(got, "balance") != nil {
 			t.Fatal("year balance")
+		}
+		if tc.typ == 3 {
+			yearTiles := screenBlock(got, "tiles").Data.AsMap()["tiles"].([]any)
+			if yearTiles[len(yearTiles)-1].(map[string]any)["title"] != "Прогноз расходов на год" {
+				t.Fatal("annual forecast title", yearTiles)
+			}
 		}
 	}
 	req.Periods = originals
