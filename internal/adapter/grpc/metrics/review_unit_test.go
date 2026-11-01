@@ -25,6 +25,18 @@ func TestUnitForecastLabelKeepsSelectedKeyAcrossTimezoneRebuild(t *testing.T) {
 		if got := p.forecastCaption(); got != tc.want {
 			t.Errorf("%s: %s want %s", tc.key, got, tc.want)
 		}
+		got, err := composerForTest(t).Compose(t.Context(), s, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tiles := valueOf(byID(got, "tiles"))["tiles"].([]any)
+		wantTitle := "Прогноз расходов"
+		if tc.typ == domain.PeriodYear {
+			wantTitle = "Прогноз расходов на год"
+		}
+		if tiles[len(tiles)-1].(map[string]any)["title"] != wantTitle {
+			t.Fatal("forecast title", tiles)
+		}
 	}
 }
 
