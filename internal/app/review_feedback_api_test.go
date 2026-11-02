@@ -235,7 +235,8 @@ func TestAPILegacySourceZoneRequiresFullRepublishingBeforeReadsResume(t *testing
 		t.Fatal(err)
 	}
 	_, err = c.analytics.ListPeriods(ctx, &analyticsv1.ListPeriodsRequest{})
-	if apitest.Reason(err) != "INTERNAL_ERROR" {
+	mapped, ok = finerr.ToREST(err)
+	if !ok || mapped.Code != "INTERNAL_ERROR" || mapped.RequestRetryable == nil || !*mapped.RequestRetryable {
 		t.Fatal(err)
 	}
 	r.CalcVersion++

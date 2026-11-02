@@ -122,4 +122,41 @@ func TestAPIChartPagesKeepAllMonthsAndRejectForeignOrStaleCursors(t *testing.T) 
 	if !ok || rest.Code != "VALIDATION_ERROR" || len(rest.Violations) != 1 || rest.Violations[0].Reason != "OUT_OF_RANGE" {
 		t.Fatal("stale cursor", err)
 	}
+	for _, badMonth := range []bool{true, false} {
+		// Acquire a live cursor, then deliver a newer source version before corrupting its chart.
+		batch.CalcVersion++
+		if _, err = c.ingest.UpsertUserMetrics(producer(ctx), batch); err != nil {
+			t.Fatal(err)
+		}
+		fresh, e := c.analytics.GetAnalytics(apitest.User(ctx, alice), &analyticsv1.GetAnalyticsRequest{Period: 4, TransferMode: 1})
+		if e != nil {
+			t.Fatal(e)
+		}
+		cursor = screenBlock(fresh, "monthly_chart").Data.AsMap()["page"].(map[string]any)["previous"].(string)
+		batch.CalcVersion++
+		delivery := proto.Clone(batch).(*analyticsv1.UpsertUserMetricsRequest)
+		if badMonth {
+			for _, snapshot := range delivery.Periods {
+				for _, metric := range snapshot.Metrics {
+					if metric.MetricId == "monthly_chart" {
+						metric.Metric.GetMonthlyChart().Points[0].Month = ""
+					}
+				}
+			}
+		}
+		if _, err = c.ingest.UpsertUserMetrics(producer(ctx), delivery); err != nil {
+			t.Fatal(err)
+		}
+		if !badMonth {
+			// Non-array details are a corrupt stored payload, not a valid protobuf representation.
+			if _, err = env.App.DB.Primary().Exec(ctx, `UPDATE period_metric SET details=jsonb_set(details,'{monthly_chart,points}','{}'::jsonb) WHERE user_id=$1 AND period_type=4 AND metric_id='monthly_chart'`, alice); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, err = c.analytics.GetChartPage(apitest.User(ctx, alice), &analyticsv1.GetChartPageRequest{Cursor: cursor})
+		rest, ok = finerr.ToREST(err)
+		if !ok || rest.Code != "VALIDATION_ERROR" || len(rest.Violations) != 1 || rest.Violations[0].Field != "cursor" || rest.Violations[0].Reason != "OUT_OF_RANGE" {
+			t.Fatalf("degraded source (badMonth=%v) must invalidate cursor: %v", badMonth, err)
+		}
+	}
 }

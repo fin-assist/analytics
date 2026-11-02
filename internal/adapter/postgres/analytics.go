@@ -31,7 +31,7 @@ head AS MATERIALIZED (
     SELECT c.period_key, coalesce(s.has_data,false) AS has_data, s.data_from AS state_data_from, s.data_to AS state_data_to, s.last_operation_at,
            s.stale_after, coalesce(s.full_months,0) AS full_months,
            coalesce(s.recalculating,false) OR coalesce(r.requested_version,0)>coalesce(s.calc_version,0) AS recalculating,
-           coalesce(p.time_zone,s.time_zone,'') AS time_zone, s.calculated_at AS state_calculated_at,
+           coalesce(s.time_zone,'') AS time_zone, s.calculated_at AS state_calculated_at,
            p.user_id IS NOT NULL AS has_snapshot,
            p.range_start, p.range_end, p.coverage, p.data_from, p.data_to, p.unread_lines_count, p.calculated_at,
            g.gap_starts, g.gap_ends,

@@ -53,6 +53,9 @@ func (r *Metrics) chartPage(ctx context.Context, user string, mode domain.Transf
 		return nil, nil
 	}
 	if total < 1 {
+		if wantRevision != "" {
+			return nil, domain.ErrCursorRange
+		}
 		return &domain.ChartPage{TimeZone: zone}, nil // Malformed delivered details degrade the graph, not healthy facts.
 	}
 	if zone == "" || zone != stateZone {
@@ -67,6 +70,9 @@ func (r *Metrics) chartPage(ctx context.Context, user string, mode domain.Transf
 	}
 	firstMonth, valid := monthIndex(first)
 	if !valid {
+		if wantRevision != "" {
+			return nil, domain.ErrCursorRange
+		}
 		return &domain.ChartPage{TimeZone: zone}, nil
 	}
 	// The snapshot version includes all metric inputs. The civil day also changes point completeness.
