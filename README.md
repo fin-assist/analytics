@@ -49,7 +49,7 @@ Metadata привязана к версии финансовой строки: �
 cmd/analytics/                     main: serve and migrate commands, listeners, shutdown
 internal/app/                      assembly: identity, pools, server, wire() (handlers, clients, jobs), access table, migration sources
 internal/app/apitest/              the whole service in-process for API tests
-internal/domain/                   entities and invariants, no infrastructure imports
+internal/domain/                   entities, invariants and cross-layer constants (values only), no infrastructure imports
 internal/metrics/                  persistence usecases and screen selection/current-time flags; consumer interfaces
 internal/adapter/grpc/metrics/     gRPC handlers and presentation: typed snapshots -> blocks and server texts
 internal/adapter/postgres/         pools, go-postgres adapter, the metrics repository on pgx
@@ -172,3 +172,7 @@ period_snapshot из того же ingest-пакета; смешанный по�
 
 Перед ревью применяются [профильные навыки](docs/review-skills/README.md) из проверяемой ревизии.
 Обязательные требования, выбор и ограничения — в `AGENTS.md`, раздел `Code Review Rules`.
+
+FIN-421: доменный уровень владеет также межслойными константами, включая технические значения;
+это только значения, без переноса внешнего поведения или инфраструктурных импортов в `internal/domain`.
+Существующий Go-код этим PR не перерабатывается; комментарии пакета уточняются вместе с фактическим переносом констант.
