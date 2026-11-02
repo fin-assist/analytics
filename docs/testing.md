@@ -111,3 +111,9 @@ NONE/LOCKED и отмену, calendar navigation и help text. PostgreSQL integr
 analytics Apply API/PG: после исключения Cloud остаётся Taxi/100000/count1, marker виден следующему GET,
 финансовые state/periods не создаются. Это проверка wire совместимости производителя/потребителя;
 одновременный запуск обоих сервисов, BFF и мобильного UI этим тестом не подменяется.
+
+Ревью PR #59: PG QueryTracer-барьер синхронизирует две уже начатые RR-транзакции перед выдачей
+курсора. Проверяются первая вставка, существующий immutable token (xmin не меняется), concurrent expiry
+cleanup, GetAnalytics и GetChartPage; initial collision действительно вызывает повтор целого snapshot.
+Полный API проверяет 12 одновременных BFF/assistant чтений, malformed first month при поддержке chart/без неё,
+legacy NULL sourcezone→republication recovery и детерминированный ранний пик при равных/нулевых расходах.

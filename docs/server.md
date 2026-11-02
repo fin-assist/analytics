@@ -160,3 +160,30 @@ revision включает источник, zone и гражданский де�
 с разными/неизвестными source zones отклоняется временным INTERNAL_ERROR/true до согласованной доставки;
 ключи не удаляются. Перед rollout миграция003, затем согласованная активация BSD/analytics/BFF по FIN-420.
 Поля нового payload обязательны по смыслу: fallback на прежний overlay отсутствует. Эта работа не выполняет deploy.
+
+### Переход существующих данных на source IANA
+
+Миграция 003 оставляет `period_snapshot.time_zone=NULL` у **всех** прежних заголовков. До перепубликации
+GetAnalytics/ListPeriods намеренно отвечают INTERNAL_ERROR/retry=true: сегодняшний профиль не доказывает
+исходный пояс старых сумм. Одного повторного GET или обычного импорта части истории недостаточно для rollout.
+
+Активация выполняется оператором в согласованном окне MAINTENANCE: analytics с контрактом v0.11 + миграция 003 →
+BSD с FIN-420 → полная перепубликация сохранённых снимков → проверка завершения → включение BFF/клиента.
+Используется существующий operator replay BSD для неизменного каталога из
+[docs/recalculation.md](https://github.com/fin-assist/bank-statement-data/blob/main/docs/recalculation.md):
+останавливаются metrics workers всех экземпляров, сбрасывается **только checkpoint текущего каталога**,
+затем запускается тот же новый BSD. Его PlanBackfill ставит обычную registry_only очередь через user lock и
+tombstone guard; Build публикует весь покрытый календарь, оба режима, all_time и rolling. Номер каталога,
+финансовые формулы, версии, pending queue и delivery outbox ради этого перехода не сбрасываются.
+
+`metrics_backfill.finished_at` подтверждает только обход пользователей. До снятия MAINTENANCE отдельно
+проверяются завершение recalc_queue, доставка metrics outbox, отсутствие NULL source zones у всех
+неудалённых retained headers и отсутствие периодов, оставшихся вне перепубликации. При неполной доставке
+чтения не включаются; штатная очередь/доставка продолжаются с сохранёнными checkpoint и версиями.
+Проверка rollout для старого NULL header и восстановления после полной публикации — API-тест
+`TestAPILegacySourceZoneRequiresFullRepublishingBeforeReadsResume`.
+
+Откат выполняется только согласованно в MAINTENANCE: BFF и BSD нового supplied-only пути нельзя оставлять
+активными со старым analytics. Миграция down удаляет source zones и служебные marker/cursor данные;
+последующее возвращение к 003 снова требует полной перепубликации и проверки готовности. Сам PR не запускает
+MAINTENANCE, backfill, миграции среды или deploy.

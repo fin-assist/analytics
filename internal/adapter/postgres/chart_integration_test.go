@@ -154,3 +154,31 @@ func TestIntegrationChartReadsUsePrimaryEvenWhenReplicaHasOlderSource(t *testing
 		t.Fatalf("fresh cursor rejected by stale replica %v %v", next, err)
 	}
 }
+
+func TestIntegrationAllTimePeakUsesEarliestEqualExpense(t *testing.T) {
+	pool := openDB(t)
+	user := newUser(419)
+	seedChart(t, pool, user, 1, 121)
+	if _, err := pool.Exec(t.Context(), `UPDATE period_metric SET details=jsonb_set(details,'{monthly_chart,points}',(SELECT jsonb_agg(jsonb_set(point,'{expense_minor}','"0"'::jsonb) ORDER BY ordinal) FROM jsonb_array_elements(details->'monthly_chart'->'points') WITH ORDINALITY AS p(point,ordinal))) WHERE user_id=$1 AND metric_id='monthly_chart'`, user); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
+	key := "all_time"
+	got, err := repo.ReadAnalytics(t.Context(), user, domain.PeriodAllTime, &key, domain.TransferWith)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var detail struct {
+		Chart struct{ Points []struct{ Month string } } `json:"monthly_chart"`
+	}
+	for _, m := range got.Snapshot.Metrics {
+		if m.ID == "monthly_chart" {
+			if err = json.Unmarshal(m.Details, &detail); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if len(detail.Chart.Points) != 1 || detail.Chart.Points[0].Month != "2010-01" {
+		t.Fatal(detail)
+	}
+}

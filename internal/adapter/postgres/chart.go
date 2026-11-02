@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/fin-assist/analytics/internal/domain"
 )
@@ -64,6 +65,10 @@ func (r *Metrics) chartPage(ctx context.Context, user string, mode domain.Transf
 	if err != nil {
 		return nil, err
 	}
+	firstMonth, valid := monthIndex(first)
+	if !valid {
+		return &domain.ChartPage{TimeZone: zone}, nil
+	}
 	// The snapshot version includes all metric inputs. The civil day also changes point completeness.
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%s|%s|%s|%s|%s|%d", user, mode, version, zone, revisions, start.UTC().Format(time.RFC3339Nano), end.UTC().Format(time.RFC3339Nano), r.now().In(loc).Format(time.DateOnly), total)))
 	rev := hex.EncodeToString(digest[:])
@@ -73,13 +78,9 @@ func (r *Metrics) chartPage(ctx context.Context, user string, mode domain.Transf
 	if wantRevision == "" {
 		page = 0
 		if selected != nil {
-			selectedMonth, e := monthIndex(*selected)
-			if e != nil {
-				return nil, e
-			}
-			firstMonth, e := monthIndex(first)
-			if e != nil {
-				return nil, e
+			selectedMonth, valid := monthIndex(*selected)
+			if !valid {
+				return nil, errors.New("invalid selected chart month")
 			}
 			index := max(0, min(total-1, selectedMonth-firstMonth))
 			page = (total - 1 - index) / chartSize
@@ -113,18 +114,24 @@ func (r *Metrics) chartPage(ctx context.Context, user string, mode domain.Transf
 	return out, nil
 }
 
-func monthIndex(key string) (int, error) {
+func monthIndex(key string) (int, bool) {
 	if (domain.PeriodKey{Type: domain.PeriodMonth, Key: key}).Validate() != nil {
-		return 0, errors.New("invalid stored chart month")
+		return 0, false
 	}
 	y, _ := strconv.Atoi(key[:4])
 	m, _ := strconv.Atoi(key[5:])
-	return y*12 + m - 1, nil
+	return y*12 + m - 1, true
 }
 
 func (r *Metrics) chartCursor(ctx context.Context, user string, mode domain.TransferMode, revision string, page int) (string, error) {
 	q := r.db.Writer(ctx)
-	// Repeated requests reuse a token. Expired and obsolete revision rows are bounded by a day.
+	// Existing pointers are immutable: a normal read must not create another row version.
+	var result string
+	err := q.QueryRow(ctx, `SELECT token FROM chart_cursor WHERE user_id=$1 AND transfer_mode=$2 AND revision=$3 AND page=$4 AND created_at>=now()-interval '1 day'`, user, int16(mode), revision, page).Scan(&result)
+	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return result, err
+	}
+	// Initial insertion and expiry cleanup can race; the owner retries the entire RR snapshot.
 	if _, err := q.Exec(ctx, `DELETE FROM chart_cursor WHERE user_id=$1 AND created_at<now()-interval '1 day'`, user); err != nil {
 		return "", err
 	}
@@ -133,10 +140,33 @@ func (r *Metrics) chartCursor(ctx context.Context, user string, mode domain.Tran
 		return "", err
 	}
 	token := hex.EncodeToString(raw)
-	var result string
-	err := q.QueryRow(ctx, `INSERT INTO chart_cursor(user_id,transfer_mode,revision,page,token) VALUES($1,$2,$3,$4,$5)
- ON CONFLICT(user_id,transfer_mode,revision,page) DO UPDATE SET token=chart_cursor.token RETURNING token`, user, int16(mode), revision, page, token).Scan(&result)
+	err = q.QueryRow(ctx, `INSERT INTO chart_cursor(user_id,transfer_mode,revision,page,token) VALUES($1,$2,$3,$4,$5)
+ ON CONFLICT(user_id,transfer_mode,revision,page) DO NOTHING RETURNING token`, user, int16(mode), revision, page, token).Scan(&result)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = q.QueryRow(ctx, `SELECT token FROM chart_cursor WHERE user_id=$1 AND transfer_mode=$2 AND revision=$3 AND page=$4`, user, int16(mode), revision, page).Scan(&result)
+	}
 	return result, err
+}
+
+// chartSnapshot retries only serialization conflicts of the whole read + cursor transaction.
+// It never repeats an external effect or joins/retries an aborted outer transaction.
+func (r *Metrics) chartSnapshot(ctx context.Context, read func(context.Context) error) error {
+	attempts := 3
+	if _, nested := Tx(ctx); nested {
+		attempts = 1
+	}
+	var err error
+	for range attempts {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		err = r.db.RunWith(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, read)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "40001" {
+			return err
+		}
+	}
+	return err
 }
 
 // ReadChartPage validates ownership against the verified caller, and reads the current primary snapshot.
@@ -148,7 +178,8 @@ func (r *Metrics) ReadChartPage(ctx context.Context, user, cursor string) (*doma
 		return nil, domain.ErrCursorFormat
 	}
 	var out *domain.ChartPage
-	err := r.db.RunWith(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(ctx context.Context) error {
+	err := r.chartSnapshot(ctx, func(ctx context.Context) error {
+		out = nil
 		var mode int16
 		var revision string
 		var page int

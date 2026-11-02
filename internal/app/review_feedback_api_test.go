@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -181,6 +182,110 @@ func TestAPIBrokenAllTimeChartDoesNotHideHealthyFacts(t *testing.T) {
 		got, err := c.analytics.GetAnalytics(apitest.User(t.Context(), alice), &analyticsv1.GetAnalyticsRequest{Period: commonv1.PeriodType_PERIOD_TYPE_ALL_TIME})
 		if err != nil || screenBlock(got, "tiles").Status != "ready" || screenBlock(got, "monthly_chart").Status != "unavailable" {
 			t.Fatalf("corrupt chart hid facts: %v %v", got, err)
+		}
+	}
+}
+
+func TestAPIMalformedFirstChartMonthDoesNotHideSelectedFacts(t *testing.T) {
+	env, c := startAPI(t)
+	r := analyticsFixture(t)
+	env.App.Now = func() time.Time { return r.State.CalculatedAt.AsTime() }
+	if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), r); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"", "2026-99", "not-a-month"} {
+		if _, err := env.App.DB.Primary().Exec(t.Context(), `UPDATE period_metric SET details=jsonb_set(details,'{monthly_chart,points,0,month}',to_jsonb($1::text)) WHERE user_id=$2 AND period_type=4 AND metric_id='monthly_chart'`, bad, alice); err != nil {
+			t.Fatal(err)
+		}
+		for _, charts := range []bool{true, false} {
+			req := &analyticsv1.GetAnalyticsRequest{Period: 1, PeriodKey: proto.String("2026-09")}
+			if !charts {
+				req.Supports = []*commonv1.BlockSupport{{Type: "ranked_list", MaxVersion: 1}}
+			}
+			got, err := c.analytics.GetAnalytics(apitest.User(t.Context(), alice), req)
+			if err != nil || screenBlock(got, "expense_categories").Status != "ready" || screenBlock(got, "expense_categories").Data.AsMap()["total"].(map[string]any)["value"] != float64(8432000) {
+				t.Fatalf("bad month hid facts: %v %v", got, err)
+			}
+			chart := screenBlock(got, "monthly_chart")
+			if charts && (chart == nil || chart.Status != "unavailable") || !charts && chart != nil {
+				t.Fatal(chart)
+			}
+		}
+	}
+}
+
+func TestAPILegacySourceZoneRequiresFullRepublishingBeforeReadsResume(t *testing.T) {
+	env, c := startAPI(t)
+	r := analyticsFixture(t)
+	env.App.Now = func() time.Time { return r.State.CalculatedAt.AsTime() }
+	write := func() {
+		t.Helper()
+		if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write()
+	if _, err := env.App.DB.Primary().Exec(t.Context(), `UPDATE period_snapshot SET time_zone=NULL WHERE user_id=$1`, alice); err != nil {
+		t.Fatal(err)
+	}
+	ctx := apitest.User(t.Context(), alice)
+	_, err := c.analytics.GetAnalytics(ctx, &analyticsv1.GetAnalyticsRequest{Period: 1, PeriodKey: proto.String("2026-09")})
+	mapped, ok := finerr.ToREST(err)
+	if !ok || mapped.Code != "INTERNAL_ERROR" || mapped.RequestRetryable == nil || !*mapped.RequestRetryable {
+		t.Fatal(err)
+	}
+	_, err = c.analytics.ListPeriods(ctx, &analyticsv1.ListPeriodsRequest{})
+	if apitest.Reason(err) != "INTERNAL_ERROR" {
+		t.Fatal(err)
+	}
+	r.CalcVersion++
+	write()
+	got, err := c.analytics.GetAnalytics(ctx, &analyticsv1.GetAnalyticsRequest{})
+	if err != nil || !got.HasData || got.TimeZone != "Europe/Moscow" {
+		t.Fatal(got, err)
+	}
+	list, err := c.analytics.ListPeriods(ctx, &analyticsv1.ListPeriodsRequest{})
+	if err != nil || len(list.Periods) != 1 || list.TimeZone != "Europe/Moscow" {
+		t.Fatal(list, err)
+	}
+}
+
+func TestAPIAllTimePeakKeepsEarliestMonthWhenValuesTie(t *testing.T) {
+	env, c := startAPI(t)
+	raw, err := os.ReadFile("../../testdata/all_time.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &analyticsv1.UpsertUserMetricsRequest{}
+	if err = protojson.Unmarshal(raw, r); err != nil {
+		t.Fatal(err)
+	}
+	env.App.Now = func() time.Time { return r.State.CalculatedAt.AsTime() }
+	for _, amount := range []int64{0, 50000} {
+		r.CalcVersion++
+		for _, snap := range r.Periods {
+			for _, m := range snap.Metrics {
+				if m.MetricId == "monthly_chart" {
+					for _, point := range m.Metric.GetMonthlyChart().Points {
+						if point.ExpenseMinor != nil {
+							point.ExpenseMinor = proto.Int64(amount)
+						}
+					}
+				}
+			}
+		}
+		if _, err = c.ingest.UpsertUserMetrics(producer(t.Context()), r); err != nil {
+			t.Fatal(err)
+		}
+		for range 3 {
+			got, err := c.analytics.GetAnalytics(apitest.User(t.Context(), alice), &analyticsv1.GetAnalyticsRequest{Period: commonv1.PeriodType_PERIOD_TYPE_ALL_TIME})
+			if err != nil {
+				t.Fatal(err)
+			}
+			notes := screenBlock(got, "monthly_chart").Data.AsMap()["notes"].([]any)
+			if len(notes) != 1 || !strings.Contains(notes[0].(map[string]any)["text"].(string), "в декабре 2025:") {
+				t.Fatal(notes)
+			}
 		}
 	}
 }

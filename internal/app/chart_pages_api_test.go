@@ -54,9 +54,33 @@ func TestAPIChartPagesKeepAllMonthsAndRejectForeignOrStaleCursors(t *testing.T) 
 	if _, err = c.ingest.UpsertUserMetrics(producer(ctx), batch); err != nil {
 		t.Fatal(err)
 	}
-	screen, err := c.analytics.GetAnalytics(apitest.User(ctx, alice), &analyticsv1.GetAnalyticsRequest{Period: 4, PeriodKey: proto.String("all_time"), TransferMode: 1})
-	if err != nil {
-		t.Fatal(err)
+	// Full user and assistant API reads concurrently issue the initial pointer.
+	type reply struct {
+		screen *analyticsv1.GetAnalyticsResponse
+		err    error
+	}
+	done := make(chan reply, 12)
+	for i := range 12 {
+		go func() {
+			callctx := apitest.User(ctx, alice)
+			if i%2 == 1 {
+				callctx = apitest.Caller(ctx, "assistant")
+			}
+			r, e := c.analytics.GetAnalytics(callctx, &analyticsv1.GetAnalyticsRequest{UserId: proto.String(alice), Period: 4, PeriodKey: proto.String("all_time"), TransferMode: 1})
+			done <- reply{r, e}
+		}()
+	}
+	var screen *analyticsv1.GetAnalyticsResponse
+	for range 12 {
+		got := <-done
+		if got.err != nil {
+			t.Fatal(got.err)
+		}
+		if screen == nil {
+			screen = got.screen
+		} else if !proto.Equal(screen, got.screen) {
+			t.Fatal("concurrent screen generations differ")
+		}
 	}
 	chart := screenBlock(screen, "monthly_chart")
 	if chart == nil {

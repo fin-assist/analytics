@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"github.com/fin-assist/analytics/internal/domain"
 )
 
@@ -77,7 +75,7 @@ SELECT h.*,
        m.filter_selection, m.filter_selection_name,
  CASE WHEN $2=4 AND m.metric_id='monthly_chart' AND jsonb_typeof(m.details->'monthly_chart'->'points')='array' THEN jsonb_build_object('monthly_chart',jsonb_build_object('points',
  (SELECT jsonb_agg(peak.point) FROM (SELECT point FROM jsonb_array_elements(m.details->'monthly_chart'->'points') point
- WHERE point->>'expense_minor' ~ '^-?[0-9]+$' ORDER BY (point->>'expense_minor')::numeric DESC LIMIT 1) peak))) ELSE m.details END
+ WHERE point->>'expense_minor' ~ '^-?[0-9]+$' ORDER BY (point->>'expense_minor')::numeric DESC,point->>'month' LIMIT 1) peak))) ELSE m.details END
 FROM head h
 LEFT JOIN period_metric m
        ON m.user_id = $1 AND m.period_type = $2 AND m.period_key = h.period_key AND m.transfer_mode = $4
@@ -155,10 +153,11 @@ func readAnalyticsRows(ctx context.Context, q querier, user string, key periodKe
 	return out, nil
 }
 
-// ReadAnalytics uses a single statement snapshot for state, default selection, data and navigation.
+// ReadAnalytics uses a coherent primary snapshot for state, default selection, data and navigation.
 func (r *Metrics) ReadAnalytics(ctx context.Context, user string, typ domain.PeriodType, selected *string, mode domain.TransferMode) (domain.AnalyticsData, error) {
 	var out domain.AnalyticsData
-	err := r.db.RunWith(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(ctx context.Context) error {
+	err := r.chartSnapshot(ctx, func(ctx context.Context) error {
+		out = domain.AnalyticsData{}
 		var err error
 		out, err = r.readAnalytics(ctx, user, typ, selected, mode)
 		if err != nil || out.State == nil || !out.State.HasData {

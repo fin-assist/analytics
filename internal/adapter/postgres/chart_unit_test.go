@@ -16,17 +16,17 @@ func TestUnitChartRejectsMalformedIdentityAndCursorBeforeDatabase(t *testing.T) 
 		}
 	}
 	for _, key := range []string{"", "all_time", "2026-00", "2026-13"} {
-		if _, err := monthIndex(key); err == nil {
+		if _, valid := monthIndex(key); valid {
 			t.Fatal("invalid month accepted", key)
 		}
 	}
-	dec, err := monthIndex("2025-12")
-	if err != nil {
-		t.Fatal(err)
+	dec, valid := monthIndex("2025-12")
+	if !valid {
+		t.Fatal("valid December rejected")
 	}
-	jan, err := monthIndex("2026-01")
-	if err != nil || jan-dec != 1 {
-		t.Fatal("calendar adjacency changed", jan, dec, err)
+	jan, valid := monthIndex("2026-01")
+	if !valid || jan-dec != 1 {
+		t.Fatal("calendar adjacency changed", jan, dec, valid)
 	}
 }
 
