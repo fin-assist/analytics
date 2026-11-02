@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/fin-assist/analytics/internal/domain"
 )
 
@@ -156,8 +158,7 @@ func readAnalyticsRows(ctx context.Context, q querier, user string, key periodKe
 // ReadAnalytics uses a coherent primary snapshot for state, default selection, data and navigation.
 func (r *Metrics) ReadAnalytics(ctx context.Context, user string, typ domain.PeriodType, selected *string, mode domain.TransferMode) (domain.AnalyticsData, error) {
 	var out domain.AnalyticsData
-	err := r.chartSnapshot(ctx, func(ctx context.Context) error {
-		out = domain.AnalyticsData{}
+	err := r.db.RunWith(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(ctx context.Context) error {
 		var err error
 		out, err = r.readAnalytics(ctx, user, typ, selected, mode)
 		if err != nil || out.State == nil || !out.State.HasData {

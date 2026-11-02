@@ -111,12 +111,18 @@ func TestAPIChartPagesKeepAllMonthsAndRejectForeignOrStaleCursors(t *testing.T) 
 		t.Fatal(forward, err)
 	}
 	_, err = c.analytics.GetChartPage(apitest.User(ctx, bob), &analyticsv1.GetChartPageRequest{Cursor: cursor})
-	if apitest.Reason(err) != "VALIDATION_ERROR" {
+	foreign, valid := finerr.ToREST(err)
+	if !valid || foreign.Code != "VALIDATION_ERROR" || len(foreign.Violations) != 1 || foreign.Violations[0].Reason != "INVALID_FORMAT" {
 		t.Fatal("foreign cursor", err)
 	}
 	_, err = c.analytics.GetChartPage(apitest.Caller(ctx, "assistant"), &analyticsv1.GetChartPageRequest{Cursor: cursor})
 	wantBare(t, err, codes.PermissionDenied)
 	now = now.AddDate(0, 0, 1)
+	_, err = c.analytics.GetChartPage(apitest.User(ctx, bob), &analyticsv1.GetChartPageRequest{Cursor: cursor})
+	foreign, valid = finerr.ToREST(err)
+	if !valid || foreign.Code != "VALIDATION_ERROR" || len(foreign.Violations) != 1 || foreign.Violations[0].Reason != "INVALID_FORMAT" {
+		t.Fatal("foreign owner must precede stale revision", err)
+	}
 	_, err = c.analytics.GetChartPage(apitest.User(ctx, alice), &analyticsv1.GetChartPageRequest{Cursor: cursor})
 	rest, ok := finerr.ToREST(err)
 	if !ok || rest.Code != "VALIDATION_ERROR" || len(rest.Violations) != 1 || rest.Violations[0].Reason != "OUT_OF_RANGE" {

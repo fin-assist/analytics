@@ -112,8 +112,7 @@ analytics Apply API/PG: после исключения Cloud остаётся T
 финансовые state/periods не создаются. Это проверка wire совместимости производителя/потребителя;
 одновременный запуск обоих сервисов, BFF и мобильного UI этим тестом не подменяется.
 
-Ревью PR #59: PG QueryTracer-барьер синхронизирует две уже начатые RR-транзакции перед выдачей
-курсора. Проверяются первая вставка, существующий immutable token (xmin не меняется), concurrent expiry
-cleanup, GetAnalytics и GetChartPage; initial collision действительно вызывает повтор целого snapshot.
-Полный API проверяет 12 одновременных BFF/assistant чтений, malformed first month при поддержке chart/без неё,
-legacy NULL sourcezone→republication recovery и детерминированный ранний пик при равных/нулевых расходах.
+Курсоры проверяются unit/fuzz-тестами (владелец до ревизии, malformed/oversize/unsupported/overflow),
+PostgreSQL-тестом чтения страниц новым экземпляром repository в READ ONLY транзакции и API с 12 параллельными
+BFF/assistant чтениями. Сохранены 121→60/60/1, обе стороны, stale/foreign/deleted history, primary при старой
+реплике, malformed first month, legacy NULL sourcezone→republication recovery и детерминированный ранний пик.

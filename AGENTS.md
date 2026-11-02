@@ -458,6 +458,8 @@ Released contracts gen/go v0.11.0 own MarkRecalculating, ApplyRegularPaymentDism
 and source time_zone. Changes usecase owns the local marker/composition transaction and tombstone guard;
 gRPC regular_projection.go validates the bounded supplied payload before any effect. No BSD client, own regular
 baseline, overlay, retired-through state or extra final protocol belongs here. Chart pages and GetAnalytics read
-primary in coherent transactions; period_snapshot.time_zone is captured from its own ingest batch.
+primary in coherent read-only transactions; stateless page cursors never write/clean up database rows.
+The cursor only describes a position, never supplies SQL identity or access rights.
+period_snapshot.time_zone is captured from its own ingest batch.
 See docs/server.md and docs/schema.md for invariants and rollout. The separate FIN-416 copy PR owns balance
 caption/annual forecast title; do not fold unrelated copy changes into this runtime increment.

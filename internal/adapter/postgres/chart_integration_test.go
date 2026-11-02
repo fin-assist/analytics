@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pgstore "github.com/fin-assist/go-postgres"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fin-assist/analytics/internal/domain"
@@ -130,9 +131,8 @@ func TestIntegrationChartPagesBoundedTenantRevisionAndClock(t *testing.T) {
 	if err = repo.db.Run(t.Context(), func(ctx context.Context) error { return repo.Purge(ctx, user) }); err != nil {
 		t.Fatal(err)
 	}
-	var rows int
-	if err = pool.QueryRow(t.Context(), "SELECT count(*) FROM chart_cursor WHERE user_id=$1", user).Scan(&rows); err != nil || rows != 0 {
-		t.Fatal("cursor leaked after purge", rows, err)
+	if _, err = repo.ReadChartPage(t.Context(), user, fresh.Chart.Previous); !errors.Is(err, domain.ErrCursorRange) {
+		t.Fatal("deleted history cursor", err)
 	}
 }
 
@@ -152,6 +152,49 @@ func TestIntegrationChartReadsUsePrimaryEvenWhenReplicaHasOlderSource(t *testing
 	next, err := repo.ReadChartPage(t.Context(), user, first.Chart.Previous)
 	if err != nil || next.Revision != first.Chart.Revision || len(pageMonths(t, next)) != 60 {
 		t.Fatalf("fresh cursor rejected by stale replica %v %v", next, err)
+	}
+}
+
+func TestIntegrationChartCursorWorksAcrossReadersInReadOnlySnapshot(t *testing.T) {
+	pool := openDB(t)
+	user, other := newUser(420), newUser(421)
+	seedChart(t, pool, user, 1, 121)
+	now := func() time.Time { return time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC) }
+	db := testMetricsDB(pool)
+	repo := NewMetrics(db, now)
+	var cursor string
+	err := db.RunWith(t.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(ctx context.Context) error {
+		key := "all_time"
+		first, err := repo.ReadAnalytics(ctx, user, domain.PeriodAllTime, &key, domain.TransferWith)
+		if err != nil {
+			return err
+		}
+		cursor = first.Chart.Previous
+		// A committed replacement on another connection cannot mix into this read snapshot.
+		seedChart(t, pool, user, 2, 122)
+		// A fresh repository has no per-request or in-memory cursor registry.
+		another := NewMetrics(db, now)
+		page, err := another.ReadChartPage(ctx, user, first.Chart.Previous)
+		if err != nil {
+			return err
+		}
+		months := pageMonths(t, page)
+		if len(months) != 60 || months[0] != "2010-02" || page.Revision != first.Chart.Revision {
+			t.Fatal(page)
+		}
+		if _, err = another.ReadChartPage(ctx, user, encodeChartCursor(user, domain.TransferWith, first.Chart.Revision, 3)); !errors.Is(err, domain.ErrCursorFormat) {
+			t.Fatal("current revision invalid page", err)
+		}
+		if _, err = another.ReadChartPage(ctx, other, first.Chart.Previous); !errors.Is(err, domain.ErrCursorFormat) {
+			t.Fatal("foreign cursor disclosed missing history", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal("chart reads must work without writes", err)
+	}
+	if _, err = repo.ReadChartPage(t.Context(), user, cursor); !errors.Is(err, domain.ErrCursorRange) {
+		t.Fatal("new transaction must reject replaced history", err)
 	}
 }
 

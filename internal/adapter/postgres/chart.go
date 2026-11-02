@@ -1,17 +1,18 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/fin-assist/analytics/internal/domain"
 )
@@ -93,7 +94,7 @@ func (r *Metrics) chartPage(ctx context.Context, user string, mode domain.Transf
 		}
 	}
 	if page < 0 || page > (total-1)/chartSize {
-		return nil, domain.ErrCursorRange
+		return nil, domain.ErrCursorFormat
 	}
 	hi := total - page*chartSize
 	lo := max(0, hi-chartSize)
@@ -106,16 +107,10 @@ func (r *Metrics) chartPage(ctx context.Context, user string, mode domain.Transf
 	}
 	out := &domain.ChartPage{Details: details, TimeZone: zone, Revision: rev}
 	if lo > 0 {
-		out.Previous, err = r.chartCursor(ctx, user, mode, rev, page+1)
-		if err != nil {
-			return nil, err
-		}
+		out.Previous = encodeChartCursor(user, mode, rev, page+1)
 	}
 	if page > 0 {
-		out.Next, err = r.chartCursor(ctx, user, mode, rev, page-1)
-		if err != nil {
-			return nil, err
-		}
+		out.Next = encodeChartCursor(user, mode, rev, page-1)
 	}
 	return out, nil
 }
@@ -129,74 +124,59 @@ func monthIndex(key string) (int, bool) {
 	return y*12 + m - 1, true
 }
 
-func (r *Metrics) chartCursor(ctx context.Context, user string, mode domain.TransferMode, revision string, page int) (string, error) {
-	q := r.db.Writer(ctx)
-	// Existing pointers are immutable: a normal read must not create another row version.
-	var result string
-	err := q.QueryRow(ctx, `SELECT token FROM chart_cursor WHERE user_id=$1 AND transfer_mode=$2 AND revision=$3 AND page=$4 AND created_at>=now()-interval '1 day'`, user, int16(mode), revision, page).Scan(&result)
-	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
-		return result, err
-	}
-	// Initial insertion and expiry cleanup can race; the owner retries the entire RR snapshot.
-	if _, err := q.Exec(ctx, `DELETE FROM chart_cursor WHERE user_id=$1 AND created_at<now()-interval '1 day'`, user); err != nil {
-		return "", err
-	}
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	token := hex.EncodeToString(raw)
-	err = q.QueryRow(ctx, `INSERT INTO chart_cursor(user_id,transfer_mode,revision,page,token) VALUES($1,$2,$3,$4,$5)
- ON CONFLICT(user_id,transfer_mode,revision,page) DO NOTHING RETURNING token`, user, int16(mode), revision, page, token).Scan(&result)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = q.QueryRow(ctx, `SELECT token FROM chart_cursor WHERE user_id=$1 AND transfer_mode=$2 AND revision=$3 AND page=$4`, user, int16(mode), revision, page).Scan(&result)
-	}
-	return result, err
+// chartCursor is a private position descriptor, never an authorization credential.
+// Identity always comes from the verified caller; owner only distinguishes foreign from stale cursors.
+type chartCursor struct {
+	Version  int                 `json:"v"`
+	Owner    string              `json:"owner"`
+	Mode     domain.TransferMode `json:"mode"`
+	Revision string              `json:"revision"`
+	Page     int                 `json:"page"`
 }
 
-// chartSnapshot retries only serialization conflicts of the whole read + cursor transaction.
-// It never repeats an external effect or joins/retries an aborted outer transaction.
-func (r *Metrics) chartSnapshot(ctx context.Context, read func(context.Context) error) error {
-	attempts := 3
-	if _, nested := Tx(ctx); nested {
-		attempts = 1
-	}
-	var err error
-	for range attempts {
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-		err = r.db.RunWith(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, read)
-		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "40001" {
-			return err
-		}
-	}
-	return err
+func chartOwner(user string) string {
+	digest := sha256.Sum256([]byte(user))
+	return hex.EncodeToString(digest[:])
 }
 
-// ReadChartPage validates ownership against the verified caller, and reads the current primary snapshot.
+func encodeChartCursor(user string, mode domain.TransferMode, revision string, page int) string {
+	value := chartCursor{Version: 1, Owner: chartOwner(user), Mode: mode, Revision: revision, Page: page}
+	// A struct of scalar integers/strings cannot fail JSON encoding.
+	raw, _ := json.Marshal(value)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeChartCursor(user, encoded string) (chartCursor, error) {
+	var value chartCursor
+	if !domain.ValidUserID(user) || len(encoded) == 0 || len(encoded) > 2048 {
+		return value, domain.ErrCursorFormat
+	}
+	raw, err := base64.RawURLEncoding.Strict().DecodeString(encoded)
+	if err != nil || json.Unmarshal(raw, &value) != nil {
+		return value, domain.ErrCursorFormat
+	}
+	// The server issues one canonical private format: reject missing/duplicate fields and trailing input.
+	canonical, _ := json.Marshal(value)
+	if !bytes.Equal(raw, canonical) || value.Version != 1 || value.Owner != chartOwner(user) ||
+		(value.Mode != domain.TransferWith && value.Mode != domain.TransferWithout) || value.Page < 0 || len(value.Revision) != 64 {
+		return value, domain.ErrCursorFormat
+	}
+	if _, err = hex.DecodeString(value.Revision); err != nil {
+		return value, domain.ErrCursorFormat
+	}
+	return value, nil
+}
+
+// ReadChartPage validates ownership before revision and reads the current primary snapshot without writes.
 func (r *Metrics) ReadChartPage(ctx context.Context, user, cursor string) (*domain.ChartPage, error) {
-	if !domain.ValidUserID(user) || len(cursor) != 64 {
-		return nil, domain.ErrCursorFormat
-	}
-	if _, err := hex.DecodeString(cursor); err != nil {
-		return nil, domain.ErrCursorFormat
+	value, err := decodeChartCursor(user, cursor)
+	if err != nil {
+		return nil, err
 	}
 	var out *domain.ChartPage
-	err := r.chartSnapshot(ctx, func(ctx context.Context) error {
-		out = nil
-		var mode int16
-		var revision string
-		var page int
-		err := r.db.Writer(ctx).QueryRow(ctx, `SELECT transfer_mode,revision,page FROM chart_cursor WHERE user_id=$1 AND token=$2 AND created_at>=now()-interval '1 day'`, user, cursor).Scan(&mode, &revision, &page)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.ErrCursorFormat
-		}
-		if err != nil {
-			return err
-		}
-		out, err = r.chartPage(ctx, user, domain.TransferMode(mode), nil, revision, page)
+	err = r.db.RunWith(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(ctx context.Context) error {
+		var err error
+		out, err = r.chartPage(ctx, user, value.Mode, nil, value.Revision, value.Page)
 		return err
 	})
 	return out, err
