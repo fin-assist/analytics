@@ -17,7 +17,10 @@ import (
 	"github.com/fin-assist/analytics/internal/domain"
 )
 
-const chartSize = 60
+const (
+	chartSize          = 60
+	chartCursorVersion = 1
+)
 
 // The JSON array stays in PostgreSQL; only the requested sixty points cross the DB boundary.
 const chartHeadSQL = `SELECT p.calc_version,coalesce(p.time_zone,''),
@@ -140,7 +143,7 @@ func chartOwner(user string) string {
 }
 
 func encodeChartCursor(user string, mode domain.TransferMode, revision string, page int) string {
-	value := chartCursor{Version: 1, Owner: chartOwner(user), Mode: mode, Revision: revision, Page: page}
+	value := chartCursor{Version: chartCursorVersion, Owner: chartOwner(user), Mode: mode, Revision: revision, Page: page}
 	// A struct of scalar integers/strings cannot fail JSON encoding.
 	raw, _ := json.Marshal(value)
 	return base64.RawURLEncoding.EncodeToString(raw)
@@ -157,7 +160,7 @@ func decodeChartCursor(user, encoded string) (chartCursor, error) {
 	}
 	// The server issues one canonical private format: reject missing/duplicate fields and trailing input.
 	canonical, _ := json.Marshal(value)
-	if !bytes.Equal(raw, canonical) || value.Version != 1 || value.Owner != chartOwner(user) ||
+	if !bytes.Equal(raw, canonical) || value.Version != chartCursorVersion || value.Owner != chartOwner(user) ||
 		(value.Mode != domain.TransferWith && value.Mode != domain.TransferWithout) || value.Page < 0 || len(value.Revision) != 64 {
 		return value, domain.ErrCursorFormat
 	}
