@@ -16,9 +16,11 @@ import (
 // The access table is grpc-api.md 3.3 for the three services analytics serves.
 func TestUnitAccessPolicyMatchesContract(t *testing.T) {
 	want := map[string]server.Rule{
-		"/finassist.analytics.v1.AnalyticsService/*":       {Callers: []string{"bank-bff", "assistant"}, Model: server.ModelMixed},
-		"/finassist.analytics.v1.MetricsIngestService/*":   {Callers: []string{"bank-statement-data"}, Model: server.ModelSystem},
-		"/finassist.userdeletion.v1.UserDeletionService/*": {Callers: []string{"user"}, Model: server.ModelSystem},
+		"/finassist.analytics.v1.AnalyticsService/GetChartPage":                 {Callers: []string{"bank-bff"}, Model: server.ModelUser},
+		"/finassist.analytics.v1.AnalyticsService/ApplyRegularPaymentDismissal": {Callers: []string{"bank-bff"}, Model: server.ModelUser},
+		"/finassist.analytics.v1.AnalyticsService/*":                            {Callers: []string{"bank-bff", "assistant"}, Model: server.ModelMixed},
+		"/finassist.analytics.v1.MetricsIngestService/*":                        {Callers: []string{"bank-statement-data"}, Model: server.ModelSystem},
+		"/finassist.userdeletion.v1.UserDeletionService/*":                      {Callers: []string{"user"}, Model: server.ModelSystem},
 	}
 	got := AccessPolicy()
 	if len(got) != len(want) {

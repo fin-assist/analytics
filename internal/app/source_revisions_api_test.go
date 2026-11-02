@@ -244,6 +244,17 @@ func responseProvenanceScenario(t *testing.T) {
 				want = map[string]int64{}
 			}
 			response, err := c.analytics.GetAnalytics(apitest.Caller(t.Context(), "assistant"), &pb.GetAnalyticsRequest{UserId: proto.String(alice), PeriodKey: proto.String("2026-09")})
+			if order != "period-then-state" {
+				// A period-only publication has no owning source IANA. It cannot become a ready calendar response.
+				if apitest.Reason(err) != "INTERNAL_ERROR" {
+					t.Fatalf("unknown source zone: %v", err)
+				}
+				_, err = c.analytics.ListPeriods(apitest.Caller(t.Context(), "assistant"), &pb.ListPeriodsRequest{UserId: proto.String(alice)})
+				if apitest.Reason(err) != "INTERNAL_ERROR" {
+					t.Fatalf("unknown list source zone: %v", err)
+				}
+				return
+			}
 			if err != nil || !response.HasData || response.State == nil {
 				t.Fatal(response, err)
 			}

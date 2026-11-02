@@ -47,7 +47,7 @@ func (p composition) insight(ctx context.Context, id string) ([]*commonv1.Block,
 			description += fmt.Sprintf(" · %d %s каждый месяц", r.GetCount(), noun(int64(r.GetCount()), "списание", "списания", "списаний"))
 		}
 		if m.GetBasis().GetRange().GetStart() != nil {
-			description += " с " + monthGen[calendarMonth(m.Basis.Range.Start).Month()-1]
+			b.HelpText = ptr("Распознано по полным месяцам с " + monthGen[m.Basis.Range.Start.AsTime().In(p.zone).Month()-1])
 		}
 		d["description"] = description
 		items := []any{}
@@ -94,7 +94,7 @@ func (p composition) insight(ctx context.Context, id string) ([]*commonv1.Block,
 				description = strings.Replace(description, ".", ",", 1)
 			}
 			if basis := monthRange(m.GetBasis().GetRange()); basis != "" {
-				description += " (" + basis + ")"
+				one.HelpText = ptr("Обычные расходы рассчитаны по периоду: " + basis)
 			}
 			one.Data, err = data(map[string]any{"icon": row.CategoryIcon, "title": row.CategoryName, "value": row.AmountMinor, "value_kind": "amount", "description": description})
 			if err != nil {

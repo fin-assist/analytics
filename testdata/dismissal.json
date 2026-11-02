@@ -1,0 +1,143 @@
+{
+  "regular_payment_id": "01a107db-ae80-7b07-b8a1-000000000999",
+  "calc_version": 11,
+  "params": {
+    "period": 1,
+    "period_key": "2026-09",
+    "transfer_mode": 1
+  },
+  "projection": {
+    "params": {
+      "period": 1,
+      "period_key": "2026-09",
+      "transfer_mode": 1
+    },
+    "currency": "RUB",
+    "time_zone": "Europe/Moscow",
+    "range": {
+      "start": "2026-09-01T00:00:00+03:00",
+      "end": "2026-10-01T00:00:00+03:00"
+    },
+    "bounds": {
+      "coverage": 2,
+      "data_from": "2026-09-01T00:00:00+03:00",
+      "data_to": "2026-09-25T21:40:00+03:00",
+      "gaps": []
+    },
+    "data_range": {
+      "start": "2026-06-01T00:00:00+03:00",
+      "end": "2026-09-26T00:00:00+03:00"
+    },
+    "metrics": [
+      {
+        "metric_id": "insights.regular_payments",
+        "definition_version": 1,
+        "metric": {
+          "status": 2,
+          "value_minor": "999999",
+          "basis": {
+            "range": {
+              "start": "2026-06-01T00:00:00+03:00",
+              "end": "2026-09-01T00:00:00+03:00"
+            },
+            "full_months": 3
+          },
+          "regular_payments": {
+            "count": 17,
+            "items": [
+              {
+                "id": "01a107db-ae80-7b07-b8a1-000000000001",
+                "title": "Спортзал",
+                "amount_minor": "10000",
+                "monthly_amount_minor": "10000",
+                "schedule_name": "15-го числа",
+                "category_id": "cat_services",
+                "filters": {
+                  "from": "2026-09-01T00:00:00+03:00",
+                  "to": "2026-10-01T00:00:00+03:00",
+                  "kind": 1,
+                  "transfer_mode": 1,
+                  "selection": "s_regular_01a107db-ae80-7b07-b8a1-000000000001",
+                  "selection_name": "Спортзал"
+                }
+              },
+              {
+                "id": "01a107db-ae80-7b07-b8a1-000000000002",
+                "title": "Связь",
+                "amount_minor": "20000",
+                "monthly_amount_minor": "20000",
+                "schedule_name": "15-го числа",
+                "category_id": "cat_services",
+                "filters": {
+                  "from": "2026-09-01T00:00:00+03:00",
+                  "to": "2026-10-01T00:00:00+03:00",
+                  "kind": 1,
+                  "transfer_mode": 1,
+                  "selection": "s_regular_01a107db-ae80-7b07-b8a1-000000000002",
+                  "selection_name": "Связь"
+                }
+              },
+              {
+                "id": "01a107db-ae80-7b07-b8a1-000000000003",
+                "title": "Музыка",
+                "amount_minor": "30000",
+                "monthly_amount_minor": "30000",
+                "schedule_name": "15-го числа",
+                "category_id": "cat_services",
+                "filters": {
+                  "from": "2026-09-01T00:00:00+03:00",
+                  "to": "2026-10-01T00:00:00+03:00",
+                  "kind": 1,
+                  "transfer_mode": 1,
+                  "selection": "s_regular_01a107db-ae80-7b07-b8a1-000000000003",
+                  "selection_name": "Музыка"
+                }
+              },
+              {
+                "id": "01a107db-ae80-7b07-b8a1-000000000004",
+                "title": "Кино",
+                "amount_minor": "40000",
+                "monthly_amount_minor": "40000",
+                "schedule_name": "15-го числа",
+                "category_id": "cat_services",
+                "filters": {
+                  "from": "2026-09-01T00:00:00+03:00",
+                  "to": "2026-10-01T00:00:00+03:00",
+                  "kind": 1,
+                  "transfer_mode": 1,
+                  "selection": "s_regular_01a107db-ae80-7b07-b8a1-000000000004",
+                  "selection_name": "Кино"
+                }
+              },
+              {
+                "id": "01a107db-ae80-7b07-b8a1-000000000005",
+                "title": "Книги",
+                "amount_minor": "50000",
+                "monthly_amount_minor": "50000",
+                "schedule_name": "15-го числа",
+                "category_id": "cat_services",
+                "filters": {
+                  "from": "2026-09-01T00:00:00+03:00",
+                  "to": "2026-10-01T00:00:00+03:00",
+                  "kind": 1,
+                  "transfer_mode": 1,
+                  "selection": "s_regular_01a107db-ae80-7b07-b8a1-000000000005",
+                  "selection_name": "Книги"
+                }
+              }
+            ]
+          },
+          "filters": {
+            "from": "2026-09-01T00:00:00+03:00",
+            "to": "2026-10-01T00:00:00+03:00",
+            "kind": 1,
+            "transfer_mode": 1,
+            "selection": "s_regular_all",
+            "selection_name": "Подписки и регулярные платежи"
+          }
+        }
+      }
+    ],
+    "user_id": "01a107db-ae80-7b07-b8a1-00000000a11c"
+  }
+}

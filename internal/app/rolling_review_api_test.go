@@ -30,7 +30,11 @@ func TestAPILegacyNonCivilStateKeepsCalendarAndAllTimeReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Periods = append(req.Periods, all.Periods...)
-	req.Periods = append(req.Periods, analyticsFixture(t).Periods...)
+	for _, snapshot := range analyticsFixture(t).Periods {
+		if snapshot.Period == commonv1.PeriodType_PERIOD_TYPE_MONTH {
+			req.Periods = append(req.Periods, snapshot)
+		}
+	}
 	env.App.Now = func() time.Time { return req.State.CalculatedAt.AsTime() }
 	if _, err = c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
 		t.Fatal(err)

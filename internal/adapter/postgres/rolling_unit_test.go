@@ -16,7 +16,7 @@ func rollingListRow() []any {
 	version := int32(4)
 	coverage := int16(domain.CoverageComplete)
 	revisions := []byte(`{"calc_version":4,"revisions":{"uploads":1}}`)
-	return []any{"UTC", &from, &end, revisions, &version, &from, &end, &coverage, revisions, &version}
+	return []any{"UTC", &from, &end, revisions, &version, &from, &end, &coverage, revisions, &version, ptr("UTC")}
 }
 
 func TestUnitRollingListUsesCoherentHeaderAndRejectsBrokenMetadata(t *testing.T) {

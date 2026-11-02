@@ -43,6 +43,7 @@ func TestUnitRetainedDSTSnapshotDoesNotGuessInclusiveCoverageDay(t *testing.T) {
 			last := chart.GetMonthlyChart().Points[len(chart.GetMonthlyChart().Points)-1]
 			last.Bounds.DataTo = timestamppb.New(to)
 			setDetails(t, &s, "monthly_chart", &analyticsv1.Metric{Details: chart.Details})
+			s.Chart.Details = fixtureMetric(&s, "monthly_chart").Details
 			c := composerForTest(t)
 			normal, err := c.Compose(t.Context(), s, nil, nil)
 			if err != nil {
@@ -77,8 +78,9 @@ func TestUnitRetainedDSTSnapshotDoesNotGuessInclusiveCoverageDay(t *testing.T) {
 			}
 			point := valueOf(byID(retained, "monthly_chart"))["points"].([]any)
 			note := point[len(point)-1].(map[string]any)["note"]
-			if note != nil && note != "неполные данные" {
-				t.Fatalf("guessed precise bar note: %v", note)
+			normalPoints := valueOf(byID(normal, "monthly_chart"))["points"].([]any)
+			if note != normalPoints[len(normalPoints)-1].(map[string]any)["note"] {
+				t.Fatalf("source-calendar note changed: %v", note)
 			}
 			if !retained.Period.Range.Start.AsTime().Equal(start) || !retained.Period.Range.End.AsTime().Equal(end) || !retained.Period.Bounds.DataTo.AsTime().Equal(to) {
 				t.Fatal("financial timestamps changed")
@@ -129,7 +131,7 @@ func TestUnitUnknownCalendarKeepsAbsoluteAvailableFrom(t *testing.T) {
 	}
 }
 
-func TestUnitSettledMismatchedCalendarStillAvoidsGuessing(t *testing.T) {
+func TestUnitSettledSnapshotUsesItsOwnCalendarAfterProfileChange(t *testing.T) {
 	s := calendarFixture(t, "2026-03", "Europe/Berlin", "UTC")
 	s.State.Recalculating = false
 	r, err := composerForTest(t).Compose(t.Context(), s, nil, nil)
@@ -137,7 +139,7 @@ func TestUnitSettledMismatchedCalendarStillAvoidsGuessing(t *testing.T) {
 		t.Fatal(err)
 	}
 	label := valueOf(byID(r, "expense_categories"))["total"].(map[string]any)["label"]
-	if label != "Всего · март 2026 · неполные данные · сохранённый расчёт" {
+	if label != "Всего · 1–25 марта" {
 		t.Fatalf("mismatched source calendar: %v", label)
 	}
 }

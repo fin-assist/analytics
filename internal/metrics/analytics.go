@@ -61,6 +61,9 @@ func (s *Screen) Get(ctx context.Context, user string, typ domain.PeriodType, ke
 	if data.State == nil || !data.State.HasData {
 		return out, nil
 	}
+	if data.Snapshot != nil && data.Snapshot.TimeZone == "" {
+		return domain.Analytics{}, domain.ErrSourceZone
+	}
 	if err := data.State.Validate(); err != nil {
 		return domain.Analytics{}, errors.New("analytics: invalid stored state")
 	}

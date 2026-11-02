@@ -94,3 +94,20 @@ Integration дополнительно проверяет WITHOUT-first при �
 calendar/all_time остаются читаемыми, ingest-only gate и rolling guard проверяются отдельно.
 `TestAPIRollingListSkipsStaleWithoutForCurrentWith`, одноимённый PostgreSQL integration и domain/row unit
 проверяют старый WITHOUT + новый WITH, точное пересечение ревизий и fallback partial/state при двух старых.
+
+## FIN-416/420: наблюдаемые гарантии
+
+Unit проверяет supplied value/count без пересчёта, все malformed projection до effects, полноту top3/items_more,
+NONE/LOCKED и отмену, calendar navigation и help text. PostgreSQL integration проверяет rollback marker при
+ошибке callback, неизменность финансовых rows/version, late marker/newer final, purge и двусторонние60-точечные
+страницы с stale replica. API проходит полную сборку и access policy: BFF/user binding, malformed/oversize,
+пустая финансовая БД, свежая метрика на повторе, effective flag без state, отказ после удаления, composition failure
+без marker commit, source-zone переход ListPeriods и121 месяц графика. Эталонная fixture dismissal.json намеренно
+передаёт count/value, отличные от локальной суммы items: analytics обязан перенести их, а не выбрать финансовую формулу.
+Это не end-to-end BSD/BFF/Android proof; те сервисы проверяют собственные границы и согласованную выкатку.
+
+`TestAPIAcceptsActualBSDV11Projection` использует синтетический binary protobuf, полученный generated-client
+вызовом настоящей BSD-сборки с PostgreSQL18, и независимые ожидаемые факты рядом с fixture. Он проходит полный
+analytics Apply API/PG: после исключения Cloud остаётся Taxi/100000/count1, marker виден следующему GET,
+финансовые state/periods не создаются. Это проверка wire совместимости производителя/потребителя;
+одновременный запуск обоих сервисов, BFF и мобильного UI этим тестом не подменяется.

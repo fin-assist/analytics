@@ -38,7 +38,7 @@ func TestIntegrationRollingSlicesRoundTripReplaceAndTombstones(t *testing.T) {
 	if _, err := upsertProto(ctx, pool, user, 4, req.Periods, nil); err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	check := func() {
 		t.Helper()
 		for _, expected := range req.Periods {
@@ -135,7 +135,7 @@ func TestIntegrationRollingListUsesAvailableWithoutHeader(t *testing.T) {
 	if _, err = upsertProto(t.Context(), pool, user, 4, without, nil); err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	for _, p := range without {
 		got, err := repo.ListPeriods(t.Context(), user, domain.PeriodType(p.Period))
 		if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != domain.CoverageComplete || !got.Items[0].Start.Equal(p.Range.Start.AsTime()) || !got.Items[0].End.Equal(p.Range.End.AsTime()) {
@@ -199,7 +199,7 @@ func TestIntegrationRollingListCertifiesOnlyCurrentHeaderRevisions(t *testing.T)
 	if _, err = upsertProto(t.Context(), pool, user, 4, req.Periods, nil); err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	check := func(coverage domain.Coverage, revisions domain.Revisions) {
 		t.Helper()
 		for _, typ := range []domain.PeriodType{domain.PeriodRollingYear, domain.PeriodRollingQuarter} {
@@ -283,7 +283,7 @@ func TestIntegrationRollingListSkipsStaleWithoutForCurrentWith(t *testing.T) {
 	if _, err = upsertProto(t.Context(), pool, user, 5, current, nil); err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	for _, p := range current {
 		got, err := repo.ListPeriods(t.Context(), user, domain.PeriodType(p.Period))
 		if err != nil || len(got.Items) != 1 || got.Items[0].Coverage != domain.CoverageComplete || !got.Items[0].Start.Equal(p.Range.Start.AsTime()) || !got.Items[0].End.Equal(end) || !reflect.DeepEqual(got.Revisions, domain.Revisions{"uploads": 2, "time_zone": 1}) {

@@ -174,6 +174,7 @@ type Metric struct {
 
 // Snapshot is a PeriodSnapshot: the full content of a period in one transfer mode.
 type Snapshot struct {
+	TimeZone         string // Source IANA zone of this immutable publication, never the latest profile zone.
 	Revisions        Revisions
 	Key              SnapshotKey
 	Range            *TimeRange
@@ -423,7 +424,15 @@ func (s *State) ValidateIngest() error {
 // name (UTC), "Local" (the server's zone), and paths with empty, "." or ".." segments
 // are refused before time.LoadLocation, which resolves them.
 func ValidateTimeZone(name string) error {
-	if name == "" || len(name) > maxTimeZone || name == "Local" {
+	if len(name) > maxTimeZone {
+		return invalid("time zone exceeds state limit")
+	}
+	return ValidateSourceTimeZone(name)
+}
+
+// ValidateSourceTimeZone checks the 128-byte IANA source-calendar contract.
+func ValidateSourceTimeZone(name string) error {
+	if name == "" || len(name) > 128 || name == "Local" {
 		return invalid("time zone %q", name)
 	}
 	for segment := range strings.SplitSeq(name, "/") {

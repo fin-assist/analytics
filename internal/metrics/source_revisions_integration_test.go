@@ -127,7 +127,7 @@ func TestIntegrationDomainSourceRevisionsAreAtomicDurableAndTenantScoped(t *test
 	}
 	defer reopened.Close()
 	key := "2026-09"
-	persisted, err := postgres.NewMetrics(reopened).ReadAnalytics(t.Context(), user, domain.PeriodMonth, &key, domain.TransferWith)
+	persisted, err := postgres.NewMetrics(reopened, time.Now).ReadAnalytics(t.Context(), user, domain.PeriodMonth, &key, domain.TransferWith)
 	if err != nil || persisted.State == nil || persisted.Snapshot == nil {
 		t.Fatal(persisted, err)
 	}

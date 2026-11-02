@@ -15,14 +15,16 @@ WITH proven_state AS MATERIALIZED (
     SELECT s.*, CASE WHEN NOT EXISTS (
         SELECT 1 FROM period_snapshot newer
         WHERE newer.user_id = s.user_id AND newer.calc_version > s.calc_version
-    ) THEN s.data_revisions END AS proven_revisions
+    ) AND NOT EXISTS (SELECT 1 FROM recalculation_marker pending
+        WHERE pending.user_id=s.user_id AND pending.requested_version>s.calc_version)
+      THEN s.data_revisions END AS proven_revisions
     FROM user_data_state s WHERE s.user_id = $1
 )
 SELECT s.time_zone,s.data_from,s.data_to,s.proven_revisions,s.calc_version,
-       p.range_start,p.range_end,p.coverage,p.data_revisions,p.calc_version
+       p.range_start,p.range_end,p.coverage,p.data_revisions,p.calc_version,p.time_zone
 FROM proven_state s
 LEFT JOIN LATERAL (
-    SELECT n.transfer_mode,n.range_start,n.range_end,n.coverage,n.data_revisions,n.calc_version
+    SELECT n.transfer_mode,n.range_start,n.range_end,n.coverage,n.data_revisions,n.calc_version,n.time_zone
     FROM period_snapshot n
     WHERE n.user_id = s.user_id AND n.period_type = $2 AND n.period_key = $3 AND NOT n.removed
 ) p ON true
@@ -60,8 +62,9 @@ func readRollingPeriod(ctx context.Context, q querier, user string, typ domain.P
 		var stateJSON, headerJSON []byte
 		var stateVersion, headerVersion *int32
 		var coverage *int16
+		var zone *string
 		if err = rows.Scan(&state.TimeZone, &state.DataFrom, &state.DataTo, &stateJSON, &stateVersion,
-			&header.Range.Start, &header.Range.End, &coverage, &headerJSON, &headerVersion); err != nil {
+			&header.Range.Start, &header.Range.End, &coverage, &headerJSON, &headerVersion, &zone); err != nil {
 			return rollingPeriodRead{}, err
 		}
 		state.Revisions, err = revisionsFromJSON(stateJSON, stateVersion)
@@ -74,6 +77,9 @@ func readRollingPeriod(ctx context.Context, q querier, user string, typ domain.P
 		}
 		if header.Range.Start == nil || header.Range.End == nil || coverage == nil {
 			return rollingPeriodRead{}, errBrokenHeader
+		}
+		if zone == nil || *zone == "" || *zone != state.TimeZone {
+			return rollingPeriodRead{}, domain.ErrSourceZone
 		}
 		header.Coverage = domain.Coverage(*coverage)
 		header.Revisions, err = revisionsFromJSON(headerJSON, headerVersion)

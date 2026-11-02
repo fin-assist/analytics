@@ -82,12 +82,12 @@ func startTransport(t *testing.T) transport {
 	if err != nil {
 		t.Fatal(err)
 	}
-	uc, err := metrics.New(db, postgres.NewMetrics(db), stones, noObserver{})
+	uc, err := metrics.New(db, postgres.NewMetrics(db, time.Now), stones, noObserver{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := grpc.NewServer(grpc.UnaryInterceptor(asUser))
-	screen, err := metrics.NewScreen(postgres.NewMetrics(db), func() time.Time { return time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC) })
+	screen, err := metrics.NewScreen(postgres.NewMetrics(db, time.Now), func() time.Time { return time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,11 @@ func startTransport(t *testing.T) transport {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metricsgrpc.Register(s, uc, screen, composer, slog.New(slog.DiscardHandler))
+	changes, err := metrics.NewChanges(db, stones, postgres.NewMetrics(db, time.Now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricsgrpc.Register(s, uc, screen, composer, changes, slog.New(slog.DiscardHandler))
 	lis := bufconn.Listen(1 << 20)
 	go func() { _ = s.Serve(lis) }()
 	t.Cleanup(s.Stop)

@@ -96,7 +96,14 @@ func calendarFixture(t *testing.T, key, oldZone, newZone string) domain.Analytic
 		t.Fatal(err)
 	}
 	s := u.Snapshots[0]
-	return domain.Analytics{AnalyticsData: domain.AnalyticsData{State: u.State, Snapshot: &s}, Key: s.Key, Range: *s.Range, Current: true}
+	s.TimeZone = oldZone
+	var chart *domain.ChartPage
+	for _, m := range s.Metrics {
+		if m.ID == "monthly_chart" {
+			chart = &domain.ChartPage{Details: m.Details, TimeZone: oldZone, Revision: "fixture"}
+		}
+	}
+	return domain.Analytics{AnalyticsData: domain.AnalyticsData{Chart: chart, State: u.State, Snapshot: &s}, Key: s.Key, Range: *s.Range, Current: true}
 }
 
 // Compare every server-produced string, excluding serialized instants whose offsets
@@ -185,10 +192,10 @@ func TestUnitPeakAndAltMonthComeFromPointKey(t *testing.T) {
 			t.Fatal(err)
 		}
 		chart := byID(got, "monthly_chart")
-		if !strings.Contains(chart.GetAltText(), "сентябрь 84 320 ₽") {
+		if !strings.Contains(chart.GetAltText(), "сентябрь 2026 84 320 ₽") {
 			t.Fatal(chart.GetAltText())
 		}
-		if !strings.HasPrefix(valueOf(chart)["notes"].([]any)[0].(map[string]any)["text"].(string), "Больше всего — в сентябре") {
+		if !strings.HasPrefix(valueOf(chart)["notes"].([]any)[0].(map[string]any)["text"].(string), "За выбранный период: Больше всего — в сентябре") {
 			t.Fatal(valueOf(chart))
 		}
 	}

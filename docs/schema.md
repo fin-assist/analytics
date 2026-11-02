@@ -311,7 +311,7 @@ JSON object с целыми int64-значениями. При совпадаю�
 промежуточный `recalculating`, неверные календарные границы, противоречие общего счётчика полных месяцев или
 крайних покрытых дней оставляют только общее объяснение правила. По calc.md §4 usecase обнуляет навигацию выбранного периода без снимка: у явного `no_data` периода нет соседей в списке покрытых периодов. Периоды целиком без данных определяются по
 отсутствию месячных заголовков только при таком подтверждении полной доставки. Сохранённый `PARTIAL` завершившегося месяца нормализуется по его точным покрытым дням/пропускам и свежему `UserDataState.calculated_at`: ежедневный расчёт не обязан заменить прежний заголовок месяца. `lock.available` дополнительно
-сверяется с числом перечисленных полных месяцев. До daily-доставки при смене календарного месяца профиля usecase `Screen` убирает подробную историю: вчерашний счётчик не даёт обещания «месяц ещё не закончился» сегодня. Внутренний признак `Rollover` также запрещает legacy-проверке скрывать `monthly_chart` по вчерашнему `full_months=0`: до свежего состояния показывается сохранённый locked/unavailable блок, а после daily раннее состояние снова определяется подтверждёнными счётчиками. Раннее состояние по calc.md §4 глобально для месяца, квартала и года: один неполный месяц — без `monthly_chart`. Его подтверждает либо доказанная история из одного `PARTIAL` месяца, либо сохранённая метрика `monthly_chart` с `need_months_with_data`, известным `available=1` и авторитетным `State.full_months=0`; тип выбранного периода не меняет состав. У legacy `no_data` без выбранного снимка/метрики неизвестная история сохраняет `unavailable`: один неполный месяц не угадывается. Никакие SQL-правила расчёта и новые ограничения БД не вводятся.
+сверяется с числом перечисленных полных месяцев. До daily-доставки при смене календарного месяца профиля usecase `Screen` убирает подробную историю: вчерашний счётчик не даёт обещания «месяц ещё не закончился» сегодня. В FIN-416 эти правила не скрывают навигационный monthly_chart: он использует самостоятельную страницу полной истории all_time, включая единственный покрытый месяц. Если источник графика ещё не доставлен, виден unavailable. Счётчики и выбранные финансовые показатели не меняются.
 
 `TestIntegrationForecastHistoryReadsOneTenantInventoryAndDeliveryProof` проверяет реальное SQL-чтение, изоляцию
 пользователя, частичную доставку, разные версии снимков и потерю месяца. API-регрессия
@@ -322,7 +322,7 @@ JSON object с целыми int64-значениями. При совпадаю�
 
 В `period_type` принимаются 5 (`rolling_year`) и 6 (`rolling_quarter`), ключ строго совпадает с именем типа; проверка — `PeriodKey.Validate`, номера прежних типов не переиспользуются. Схема не меняется. Оба режима каждого singleton заменяются существующей атомарной записью и удаляются прежними версиями-надгробиями; старый outbox не восстанавливает удалённый снимок. `MonthlyPoint.calculation_range` хранится без потери точности в существующем `period_metric.details` рядом с календарными `month`/`range`.
 
-Перед композиционным выводом скользящей точки её диапазон проверяется как точное пересечение календарного месяца с диапазоном периода; неверные поля не расширяют денежную выборку, блок становится unavailable. Список rolling-периодов и GetAnalytics используют один согласованный read-state/selected-header снимок; если якорь состояния уже сменился, прежние суммы и покрытие заголовка не переносятся на новый диапазон. Тесты: `TestIntegrationRollingSlicesRoundTripReplaceAndTombstones`, `TestAPIRollingFactsSlicesModesKeysAndIsolation`, `TestAPIRollingPendingCoverageDailyReplacementAndRemoval` и unit rolling suites.
+Для заметок выбранного rolling-периода точка проверяется как точное пересечение календарного месяца с диапазоном периода; неверные поля исключают эти заметки. Навигационный график FIN-416 отдельно показывает полные месяцы all_time, без обрезки до rolling-диапазона. Список rolling-периодов и GetAnalytics используют один согласованный read-state/selected-header снимок; если якорь состояния уже сменился, прежние суммы и покрытие заголовка не переносятся на новый диапазон. Тесты: `TestIntegrationRollingSlicesRoundTripReplaceAndTombstones`, `TestAPIRollingFactsSlicesModesKeysAndIsolation`, `TestAPIRollingPendingCoverageDailyReplacementAndRemoval` и unit rolling suites.
 
 
 ### Некалендарный период «За всё время» (FIN-400)
@@ -347,3 +347,22 @@ complete в partial. Проверка proof охватывает все заго
 Civil-проверка `data_to` применяется только на ingest. `State.Validate` на чтении сохраняет прежние
 инварианты, чтобы legacy-строка или изменение tzdata не делали недоступными calendar/all_time. Собственная
 защита rolling-range на чтении сохраняется; сохранённые финансовые границы не нормализуются задним числом.
+
+## Маркер, source zone и страницы графика (FIN-416)
+
+Миграция003 добавляет recalculation_marker(user_id PK, requested_version, created_at), nullable
+period_snapshot.time_zone и chart_cursor(user_id, transfer_mode, revision, page, token UNIQUE, created_at).
+PK страницы — user/mode/revision/page; FK user→user_data_state ON DELETE CASCADE удаляет курсоры вместе с данными.
+Marker живёт отдельно от финансового state и удаляется Purge в той же tombstone-транзакции; он допустим до
+первого финансового снимка. created_at технический now(), бизнес-часы графика внедряются из app.Now.
+
+Инварианты в коде, без CHECK/триггеров:
+- target>0; marker монотонен под общим guard с ingest/purge. Apply composition failure откатывает marker.
+- Apply не пишет state/period snapshots/revisions и не создаёт overlay/retired-through; late old target не
+  уменьшает новый marker. Unit changes, PostgreSQL changes_integration и публичные dismissal_api покрывают это.
+- Пояс каждого period_snapshot — State того же принятого пакета; неизвестный старый пояс не угадывается.
+- Chart read ограничен60 точками на DB→service; JSON all_time остаётся источником в PostgreSQL.
+  Непрозрачный token проверяется вместе с user, режимом и актуальной revision; срок хранения1 день.
+  Chart integration проверяет121→60/60/1, переходы в обе стороны, смену ревизии/дня, primary при stale replica и purge.
+- GetAnalytics/ChartPage используют primary repeatable-read: marker после ACK не теряется из-за replica,
+  cursor свежего ответа не сверяется со старой replica. Global provenance остаётся пересечением используемых источников.

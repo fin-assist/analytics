@@ -31,7 +31,7 @@ func TestUnitAllTimeUsesPersistedBoundsAndStateFallbackWithoutCalendarNavigation
 		}
 	}
 	retained := from.AddDate(0, 0, 1)
-	f.data.Snapshot = &domain.Snapshot{Range: &domain.TimeRange{Start: &retained, End: &to}}
+	f.data.Snapshot = &domain.Snapshot{TimeZone: "Europe/Moscow", Range: &domain.TimeRange{Start: &retained, End: &to}}
 	got, err := uc.Get(t.Context(), user, domain.PeriodAllTime, nil, domain.TransferWith)
 	if err != nil || !got.Range.Start.Equal(retained) {
 		t.Fatalf("retained facts lost their own range: %+v %v", got, err)

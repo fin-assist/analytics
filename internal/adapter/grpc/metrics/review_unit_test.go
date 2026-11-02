@@ -36,7 +36,7 @@ func TestUnitBalanceSurvivesCorruptMonthlyDetails(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if screen := byID(got, "monthly_chart"); screen.Status != "unavailable" {
+		if screen := byID(got, "monthly_chart"); screen.Status != "ready" {
 			t.Fatal(screen)
 		}
 		b := byID(got, "balance")

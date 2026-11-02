@@ -15,8 +15,8 @@ func TestUnitEmptyPeriodTextKeepsPrecisionNotesAfterNegation(t *testing.T) {
 		{"precise", "Europe/Moscow", "1–25 сентября нет", false, domain.CoveragePartial},
 		{"rebuilding-partial", "UTC", "сентябрь 2026 нет · неполные данные · идёт пересчёт", true, domain.CoveragePartial},
 		{"rebuilding-complete", "UTC", "сентябрь 2026 нет · идёт пересчёт", true, domain.CoverageComplete},
-		{"retained-partial", "UTC", "сентябрь 2026 нет · неполные данные · сохранённый расчёт", false, domain.CoveragePartial},
-		{"retained-complete", "UTC", "сентябрь 2026 нет · сохранённый расчёт", false, domain.CoverageComplete},
+		{"retained-partial", "UTC", "1–25 сентября нет", false, domain.CoveragePartial},
+		{"retained-complete", "UTC", "1–25 сентября нет", false, domain.CoverageComplete},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := screenFixture(t)

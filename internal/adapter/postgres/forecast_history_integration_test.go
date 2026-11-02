@@ -26,7 +26,7 @@ func TestIntegrationForecastHistoryReadsOneTenantInventoryAndDeliveryProof(t *te
 	var snapshots []domain.Snapshot
 	for _, row := range rows {
 		for _, mode := range domain.TransferModes {
-			snapshots = append(snapshots, domain.Snapshot{Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: domain.PeriodMonth, Key: row.Key}, Mode: mode}, Range: &row.Range, Coverage: row.Coverage, DataFrom: row.DataFrom, DataTo: row.DataTo, Gaps: row.Gaps, CalculatedAt: state.CalculatedAt, Revisions: state.Revisions})
+			snapshots = append(snapshots, domain.Snapshot{TimeZone: state.TimeZone, Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: domain.PeriodMonth, Key: row.Key}, Mode: mode}, Range: &row.Range, Coverage: row.Coverage, DataFrom: row.DataFrom, DataTo: row.DataTo, Gaps: row.Gaps, CalculatedAt: state.CalculatedAt, Revisions: state.Revisions})
 		}
 	}
 	gapStart := time.Date(2026, 10, 10, 0, 0, 0, 0, rows[12].Range.Start.Location())
@@ -40,7 +40,7 @@ func TestIntegrationForecastHistoryReadsOneTenantInventoryAndDeliveryProof(t *te
 		t.Fatal(err)
 	}
 	writeState(4)
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	read := func() *domain.ForecastHistory {
 		t.Helper()
 		key := "2026-10"
@@ -149,7 +149,7 @@ func TestIntegrationKnownEarlyNoDataUsesCompletedGlobalInventory(t *testing.T) {
 	state.FullMonths = 0
 	snapshots := []domain.Snapshot{}
 	for _, mode := range domain.TransferModes {
-		snapshots = append(snapshots, domain.Snapshot{Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: domain.PeriodMonth, Key: row.Key}, Mode: mode}, Range: &row.Range, Coverage: domain.CoveragePartial, DataFrom: row.DataFrom, DataTo: row.DataTo, CalculatedAt: state.CalculatedAt, Revisions: state.Revisions})
+		snapshots = append(snapshots, domain.Snapshot{TimeZone: state.TimeZone, Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: domain.PeriodMonth, Key: row.Key}, Mode: mode}, Range: &row.Range, Coverage: domain.CoveragePartial, DataFrom: row.DataFrom, DataTo: row.DataTo, CalculatedAt: state.CalculatedAt, Revisions: state.Revisions})
 	}
 	if _, err := upsertPeriods(ctx, pool, user, 4, snapshots, nil); err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestIntegrationKnownEarlyNoDataUsesCompletedGlobalInventory(t *testing.T) {
 	if _, err := upsertState(ctx, pool, user, 4, stateRowOf(state)); err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	screen, err := usecase.NewScreen(repo, func() time.Time { return *state.CalculatedAt })
 	if err != nil {
 		t.Fatal(err)
@@ -179,8 +179,8 @@ func TestIntegrationKnownEarlyNoDataUsesCompletedGlobalInventory(t *testing.T) {
 		t.Fatal(response.Navigation)
 	}
 	for _, block := range response.Blocks {
-		if block.Id == "monthly_chart" {
-			t.Fatal("known early inventory fabricated a chart")
+		if block.Id == "monthly_chart" && block.Status != "unavailable" {
+			t.Fatal("missing independent navigation source fabricated points", block)
 		}
 		if block.Id == "tiles" && (block.Status != "none" || len(block.Data.AsMap()["tiles"].([]any)) != 0) {
 			t.Fatal(block)

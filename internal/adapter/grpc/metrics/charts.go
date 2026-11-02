@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -21,54 +20,43 @@ func (p composition) chart(ctx context.Context, id string) (*commonv1.Block, err
 		}
 		return p.balanceChart(ctx, m)
 	}
-	if err != nil {
-		return nil, err
+	block, err := navigationChart(ctx, p.s.Chart)
+	if err != nil || block.Status != "ready" {
+		return block, err
 	}
-	b := p.base(id, m)
-	if !ready(m) {
-		return b, nil
+	d := block.Data.AsMap()
+	validSelected := m != nil && ready(m) && m.GetMonthlyChart() != nil
+	if validSelected && p.s.Key.Type.Rolling() {
+		for _, point := range m.GetMonthlyChart().Points {
+			if rollingPoint(point, p.s.Range, p.zone) != nil {
+				validSelected = false
+				break
+			}
+		}
 	}
-	chart := m.GetMonthlyChart()
-	if chart == nil {
-		return nil, errors.New("monthly chart details absent")
+	if validSelected {
+		notes := p.chartNotes(m.GetMonthlyChart().Points)
+		if len(notes) > 0 {
+			for _, note := range notes {
+				n := note.(map[string]any)
+				n["text"] = "За выбранный период: " + n["text"].(string)
+			}
+			d["notes"] = notes
+		}
 	}
-	points := []any{}
-	alt := []string{}
-	for _, point := range chart.Points {
-		if err := ctx.Err(); err != nil {
+	if p.s.Key.Type == domain.PeriodMonth {
+		nav, err := metric(domain.Metric{Details: p.s.Chart.Details})
+		if err != nil {
 			return nil, err
 		}
-		if point.GetRange().GetStart() == nil || point.GetRange().GetEnd() == nil {
-			return nil, errors.New("monthly point range absent")
-		}
-		var value any
-		if point.ExpenseMinor != nil {
-			value = point.GetExpenseMinor()
-		}
-		bar := p.barPoint(point, value)
-		if p.s.Key.Type.Rolling() {
-			if err := rollingPoint(point, p.s.Range, p.zone); err != nil {
-				return nil, err
+		for i, point := range nav.GetMonthlyChart().Points {
+			if point.Month == p.s.Key.Key {
+				d["highlight_index"] = i
 			}
-			bar["range"] = rangeJSON(point.CalculationRange, p.zone)
 		}
-		if action := monthSelection(point); action != nil {
-			bar["action"] = map[string]any{"type": action.Type, "period": "month", "date": action.GetPeriodKey()}
-		}
-		points = append(points, bar)
-		v := "нет данных"
-		if point.ExpenseMinor != nil {
-			v = money(point.GetExpenseMinor())
-		}
-		alt = append(alt, p.chartMonthName(point.Month, monthNom)+" "+v)
 	}
-	d := map[string]any{"kind": "bar", "value_kind": "amount", "points": points, "notes": p.chartNotes(chart.Points)}
-	if p.s.Key.Type != domain.PeriodYear && p.s.Key.Type != domain.PeriodAllTime && !p.s.Key.Type.Rolling() && len(points) > 0 {
-		d["highlight_index"] = len(points) - 1
-	}
-	b.AltText = ptr(title(id) + ": " + strings.Join(alt, ", "))
-	b.Data, err = data(d)
-	return b, err
+	block.Data, err = data(d)
+	return block, err
 }
 
 func (p composition) balanceChart(ctx context.Context, chartMetric *analyticsv1.Metric) (*commonv1.Block, error) {

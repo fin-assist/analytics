@@ -47,6 +47,7 @@ type composition struct {
 	zone        *time.Location
 	metrics     map[string]domain.Metric
 	tileVersion int32
+	sourceRange *domain.TimeRange
 }
 
 func (p composition) get(id string) (*analyticsv1.Metric, error) {
@@ -57,10 +58,25 @@ func (p composition) get(id string) (*analyticsv1.Metric, error) {
 	return metric(m)
 }
 
+// The financial snapshot owns calendar labels even while the user's global state rebuilds.
+func compositionZone(s domain.Analytics) (*time.Location, error) {
+	if s.State == nil {
+		return nil, errors.New("state absent")
+	}
+	name := s.State.TimeZone
+	if s.Snapshot != nil {
+		name = s.Snapshot.TimeZone
+	}
+	if err := domain.ValidateTimeZone(name); err != nil {
+		return nil, domain.ErrSourceZone
+	}
+	return time.LoadLocation(name)
+}
+
 // Compose projects persisted aggregates and derives only the display quantities of
 // calc.md 1/5/10 and api.md 6.1. It never reaggregates operations or chooses bases/thresholds.
 func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*commonv1.BlockSupport, exp map[string]string) (*analyticsv1.GetAnalyticsResponse, error) {
-	zone, err := time.LoadLocation(s.State.TimeZone)
+	zone, err := compositionZone(s)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +108,7 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 		state.UnreadLinesCount = snap.UnreadLines
 		state.CalculatedAt = timestamp(snap.CalculatedAt)
 	}
-	out := &analyticsv1.GetAnalyticsResponse{HasData: true, Currency: "RUB", TimeZone: s.State.TimeZone,
+	out := &analyticsv1.GetAnalyticsResponse{HasData: true, Currency: "RUB", TimeZone: zone.String(),
 		Params: &commonv1.AnalyticsParams{Period: commonv1.PeriodType(s.Key.Type), PeriodKey: s.Key.Key, TransferMode: commonv1.TransferMode(s.Key.Mode)},
 		Period: &analyticsv1.PeriodInfo{Range: timerange(&s.Range), IsCurrent: s.Current, Bounds: bounds}, Navigation: &analyticsv1.Navigation{Previous: s.Previous, Next: s.Next}, State: state}
 	ids := []string{"tiles", "monthly_chart", "expense_categories", "income_categories"}
@@ -111,9 +127,6 @@ func (c *Composer) Compose(ctx context.Context, s domain.Analytics, supports []*
 			continue
 		}
 		if !compatible(blockType(id), supports) {
-			continue
-		}
-		if id == "monthly_chart" && p.early() {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
@@ -299,20 +312,6 @@ func safeNumbers(v any) error {
 	return nil
 }
 
-func (p composition) early() bool {
-	if p.s.Key.Type == domain.PeriodAllTime || p.s.Key.Type.Rolling() {
-		return false
-	}
-	if p.s.Rollover {
-		return false
-	}
-	if history := p.s.History; history != nil {
-		return len(history.Months) == 1 && history.Months[0].Coverage == domain.CoveragePartial
-	}
-	m, err := p.get("monthly_chart")
-	return err == nil && p.s.State.FullMonths == 0 && m.GetLock().GetReason() == analyticsv1.LockReason_LOCK_REASON_NEED_MONTHS_WITH_DATA && m.GetLock().GetAvailable() == 1
-}
-
 func (p composition) build(ctx context.Context, id string) ([]*commonv1.Block, error) {
 	if id == "heading" {
 		d, err := data(map[string]any{"text": "Регулярные платежи и заметные траты"})
@@ -335,6 +334,9 @@ func (p composition) build(ctx context.Context, id string) ([]*commonv1.Block, e
 
 func (p composition) base(id string, m *analyticsv1.Metric) *commonv1.Block {
 	b := &commonv1.Block{Id: id, Type: blockType(id), V: 1, Title: ptr(title(id)), AltText: ptr(title(id)), Status: metricStatus(m)}
+	if help := p.help(id, m); help != "" {
+		b.HelpText = &help
+	}
 	if b.Status == "unavailable" {
 		b.EmptyText = ptr(unavailableText)
 	}
@@ -345,7 +347,7 @@ func (p composition) base(id string, m *analyticsv1.Metric) *commonv1.Block {
 	return b
 }
 
-func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockLock {
+func (p composition) detailedLock(id string, l *analyticsv1.MetricLock) *commonv1.BlockLock {
 	out := &commonv1.BlockLock{Text: "Пока недоступно"}
 	if l == nil {
 		return out
@@ -363,7 +365,12 @@ func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockL
 				out.Text += ", есть 0"
 			} else if l.GetAvailable() == 0 {
 				// Global coverage belongs to the current state, not the retained snapshot calendar.
-				from, to := p.s.State.DataFrom, p.s.State.DataTo
+				var from, to *time.Time
+				if p.sourceRange != nil {
+					from, to = p.sourceRange.Start, p.sourceRange.End
+				} else if p.s.State != nil {
+					from, to = p.s.State.DataFrom, p.s.State.DataTo
+				}
 				// Windowed observations may only describe the data before the selected boundary.
 				limit := p.s.Range.End
 				if id == "notable_spending" {
@@ -439,6 +446,9 @@ func (p composition) emptyPeriodText(prefix string) string {
 
 func (p composition) tile(id, label string, m *analyticsv1.Metric, caption string) map[string]any {
 	out := map[string]any{"id": id, "title": label, "status": metricStatus(m)}
+	if help := p.help(id, m); help != "" {
+		out["help_text"] = help
+	}
 	if ready(m) && m.ValueMinor == nil {
 		out["status"] = "unavailable"
 	}
@@ -491,7 +501,11 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 			share = fmt.Sprintf("−%d%% · потратили больше, чем получили", -pct)
 		}
 	}
-	actual := p.tile("expense", "Расходы", expense, p.caption())
+	periodCaption, periodHelp := p.captionParts()
+	actual := p.tile("expense", "Расходы", expense, periodCaption)
+	if periodHelp != "" {
+		actual["help_text"] = periodHelp
+	}
 	var forecastTile map[string]any
 	forecast := values["tiles.forecast"]
 	if p.s.Key.Type != domain.PeriodAllTime && p.s.Current && !p.s.Stale && forecast.GetLock().GetReason() != analyticsv1.LockReason_LOCK_REASON_STALE_DATA {
@@ -501,12 +515,16 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 		}
 		forecastTile = p.tile("forecast", label, forecast, p.forecastCaption())
 		forecastTile["approx"] = true
+		forecastTile["caption"] = "к концу периода"
+		if p.s.Key.Type == domain.PeriodYear {
+			forecastTile["caption"] = "К концу " + p.s.Key.Key + " года"
+		}
 	}
 	dailyCaption := "в среднем за " + p.caption()
 	cmp := values["tiles.daily_expense.comparison"]
 	if p.s.Key.Type.Rolling() {
 		cmp = nil
-		dailyCaption = "По дням с данными не позже сегодня; пропуски не учитываются"
+		dailyCaption = "по покрытым дням"
 	}
 	if ready(cmp) && cmp.ValueMinor != nil {
 		dailyCaption = "раньше — " + money(cmp.GetValueMinor())
@@ -516,6 +534,9 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	}
 	tiles := []any{p.tile("balance", "Доходы минус расходы", bal, share), actual, p.tile("daily_expense", "Расходы в день", daily, dailyCaption), p.tile("income", "Доходы", income, "")}
 	tiles[3].(map[string]any)["show_plus"] = true
+	if p.s.Key.Type.Rolling() {
+		tiles[2].(map[string]any)["help_text"] = "Средние расходы по покрытым дням не позже сегодня; пропуски не учитываются"
+	}
 	if forecastTile != nil {
 		tiles = append(tiles, forecastTile)
 	}

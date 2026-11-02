@@ -70,7 +70,7 @@ func TestAPIGetAnalyticsAccessAndStorageFailure(t *testing.T) {
 
 func analyticsFixture(t *testing.T) *analyticsv1.UpsertUserMetricsRequest {
 	t.Helper()
-	raw, err := os.ReadFile("../../testdata/analytics.json")
+	raw, err := os.ReadFile("../../testdata/analytics_navigation.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Helper()
 		req.CalcVersion++
 		if _, err := ingest.UpsertUserMetrics(producerCtx, req); err != nil {
-			t.Fatal(err)
+			t.Fatalf("ingest version %d: %v", req.CalcVersion, err)
 		}
 	}
 	read := func(r *analyticsv1.GetAnalyticsRequest) *analyticsv1.GetAnalyticsResponse {
@@ -133,7 +133,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	if !strings.HasPrefix(small["description"].(string), "по августу ·") {
 		t.Fatal(small)
 	}
-	if screenBlock(got, "monthly_chart").Data.AsMap()["points"].([]any)[1].(map[string]any)["data_to"] != "2026-09-25T21:40:00+03:00" {
+	if screenBlock(got, "monthly_chart").Data.AsMap()["points"].([]any)[3].(map[string]any)["data_to"] != "2026-09-25T21:40:00+03:00" {
 		t.Fatal("point data_to")
 	}
 	got = read(&analyticsv1.GetAnalyticsRequest{TransferMode: 2})
@@ -152,6 +152,9 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	other := analyticsFixture(t)
 	other.UserId = bob
 	for _, snap := range other.Periods {
+		if snap.Period != commonv1.PeriodType_PERIOD_TYPE_MONTH {
+			continue
+		}
 		snap.PeriodKey = "2026-10"
 		from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.FixedZone("MSK", 10800))
 		snap.Range = &commonv1.TimeRange{Start: timestamppb.New(from), End: timestamppb.New(from.AddDate(0, 1, 0))}
@@ -216,6 +219,9 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		key, start, end string
 	}{{2, "2026-Q3", "2026-07-01T00:00:00+03:00", "2026-10-01T00:00:00+03:00"}, {3, "2026", "2026-01-01T00:00:00+03:00", "2027-01-01T00:00:00+03:00"}} {
 		for _, s := range originals {
+			if s.Period != commonv1.PeriodType_PERIOD_TYPE_MONTH {
+				continue
+			}
 			copy := proto.Clone(s).(*analyticsv1.PeriodSnapshot)
 			copy.Period = tc.typ
 			copy.PeriodKey = tc.key
@@ -318,8 +324,8 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	}
 	write()
 	got = read(&analyticsv1.GetAnalyticsRequest{})
-	if screenBlock(got, "monthly_chart") != nil {
-		t.Fatal("early chart")
+	if b := screenBlock(got, "monthly_chart"); b == nil || b.Status != "unavailable" {
+		t.Fatal("missing all-time source should remain unavailable", b)
 	}
 	// Stale/current are evaluated at read time, even when the stored forecast was ready.
 	req = analyticsFixture(t)
@@ -366,13 +372,13 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 	}
 	req = analyticsFixture(t)
 	req.CalcVersion = 245
-	setFixtureStateZone(t, req.State, "UTC")
+	setFixtureStateZone(t, req.State, "Europe/Moscow")
 	req.State.Recalculating = true
 	write()
 	rebuilt := read(&analyticsv1.GetAnalyticsRequest{})
 	assertRebuiltCalendar(t, rebuilt, req.Periods[0])
-	// The opposite direction would shift an exclusive end into the next month in the new zone.
-	rawUTC, e := os.ReadFile("../../testdata/analytics.json")
+	// A separately delivered UTC source has the same calendar labels and its own exact instants.
+	rawUTC, e := os.ReadFile("../../testdata/analytics_navigation.json")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -381,7 +387,7 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 		t.Fatal(e)
 	}
 	req.CalcVersion = 247
-	setFixtureStateZone(t, req.State, "Europe/Moscow")
+	req.State.TimeZone = "UTC"
 	req.State.Recalculating = true
 	write()
 	rebuilt = read(&analyticsv1.GetAnalyticsRequest{})
@@ -412,17 +418,17 @@ func screenScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient
 func assertRebuiltCalendar(t *testing.T, r *analyticsv1.GetAnalyticsResponse, source *analyticsv1.PeriodSnapshot) {
 	t.Helper()
 	tiles := screenBlock(r, "tiles").Data.AsMap()["tiles"].([]any)
-	if tiles[4].(map[string]any)["caption"] != "на сентябрь" || tiles[2].(map[string]any)["caption"] != "в августе — 2 890 ₽" {
+	if tiles[4].(map[string]any)["caption"] != "к концу периода" || tiles[2].(map[string]any)["caption"] != "в августе — 2 890 ₽" {
 		t.Fatal("tile calendar shifted", tiles)
 	}
-	if !strings.HasPrefix(screenBlock(r, "small_frequent").Data.AsMap()["description"].(string), "по августу ·") || !strings.HasSuffix(screenBlock(r, "regular_payments").Data.AsMap()["description"].(string), "с июня") {
+	if !strings.HasPrefix(screenBlock(r, "small_frequent").Data.AsMap()["description"].(string), "по августу ·") || !strings.HasSuffix(screenBlock(r, "regular_payments").GetHelpText(), "с июня") {
 		t.Fatal("observation basis shifted")
 	}
-	if !strings.Contains(screenBlock(r, "notable_spending").Data.AsMap()["description"].(string), "(июнь — август)") {
+	if !strings.Contains(screenBlock(r, "notable_spending").GetHelpText(), "июнь — август") {
 		t.Fatal("notable basis shifted")
 	}
 	chart := screenBlock(r, "monthly_chart")
-	if !strings.Contains(chart.GetAltText(), "август 70 000 ₽, сентябрь 84 320 ₽") {
+	if !strings.Contains(chart.GetAltText(), "август 2026 70 000 ₽, сентябрь 2026 84 320 ₽") {
 		t.Fatal(chart.GetAltText())
 	}
 	notes := chart.Data.AsMap()["notes"].([]any)
@@ -435,26 +441,25 @@ func assertRebuiltCalendar(t *testing.T, r *analyticsv1.GetAnalyticsResponse, so
 	if !proto.Equal(r.Period.Range, source.Range) || !proto.Equal(r.Period.Bounds.DataFrom, source.Bounds.DataFrom) || !proto.Equal(r.Period.Bounds.DataTo, source.Bounds.DataTo) {
 		t.Fatal("stored financial boundaries changed")
 	}
-	point := chart.Data.AsMap()["points"].([]any)[1].(map[string]any)
+	point := chart.Data.AsMap()["points"].([]any)[3].(map[string]any)
 	instant, e := time.Parse(time.RFC3339Nano, point["data_to"].(string))
-	if e != nil || !instant.Equal(source.Bounds.DataTo.AsTime()) || point["note"] != "неполные данные" {
+	if e != nil || !instant.Equal(source.Bounds.DataTo.AsTime()) || point["note"] != "по 25-е" {
 		t.Fatal("point instant/note changed", point, e)
 	}
 }
 
-// The producer's source IANA is absent from PeriodSnapshot. Round-trip actual
-// snapshots across DST boundaries without asserting an unrecoverable civil day.
+// The period chunk records its source IANA. Round-trip DST instants and use that calendar for navigation labels.
 func retainedDSTScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceClient, client analyticsv1.AnalyticsServiceClient, userCtx, producerCtx context.Context) {
 	t.Helper()
 	for i, tc := range []struct {
-		key, month, start, end, to, label string
-		period                            commonv1.PeriodType
+		key, month, start, end, to, label, note string
+		period                                  commonv1.PeriodType
 	}{
-		{"2026-03", "2026-03", "2026-03-01T00:00:00+01:00", "2026-04-01T00:00:00+02:00", "2026-03-30T00:30:00+02:00", "март 2026", 1},
-		{"2026-10", "2026-10", "2026-10-01T00:00:00+02:00", "2026-11-01T00:00:00+01:00", "2026-10-28T23:59:59+01:00", "октябрь 2026", 1},
-		{"2026-10", "2026-10", "2026-10-01T00:00:00+02:00", "2026-11-01T00:00:00+01:00", "2026-10-31T23:59:59+01:00", "октябрь 2026", 1},
-		{"2026-Q4", "2026-12", "2026-10-01T00:00:00+02:00", "2027-01-01T00:00:00+01:00", "2026-12-31T23:59:59+01:00", "IV квартал 2026", 2},
-		{"2026", "2026-06", "2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z", "2026-06-30T00:30:00+01:00", "2026 год", 3},
+		{"2026-03", "2026-03", "2026-03-01T00:00:00+01:00", "2026-04-01T00:00:00+02:00", "2026-03-30T00:30:00+02:00", "март 2026", "по 30-е", 1},
+		{"2026-10", "2026-10", "2026-10-01T00:00:00+02:00", "2026-11-01T00:00:00+01:00", "2026-10-28T23:59:59+01:00", "октябрь 2026", "по 28-е", 1},
+		{"2026-10", "2026-10", "2026-10-01T00:00:00+02:00", "2026-11-01T00:00:00+01:00", "2026-10-31T23:59:59+01:00", "октябрь 2026", "", 1},
+		{"2026-Q4", "2026-12", "2026-10-01T00:00:00+02:00", "2027-01-01T00:00:00+01:00", "2026-12-31T23:59:59+01:00", "IV квартал 2026", "", 2},
+		{"2026", "2026-06", "2026-01-01T00:00:00Z", "2027-01-01T00:00:00Z", "2026-06-30T00:30:00+01:00", "2026 год", "", 3},
 	} {
 		t.Run("retained-DST-"+tc.to, func(t *testing.T) {
 			parse := func(value string) *timestamppb.Timestamp {
@@ -466,10 +471,14 @@ func retainedDSTScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceC
 			}
 			req := analyticsFixture(t)
 			req.CalcVersion = int32(300 + i)
-			setFixtureStateZone(t, req.State, "UTC")
+			req.Periods = req.Periods[:2]
+			req.State.TimeZone = "Europe/Berlin"
+			if tc.period == commonv1.PeriodType_PERIOD_TYPE_YEAR {
+				req.State.TimeZone = "Europe/London"
+			}
 			req.State.Recalculating = true
-			req.State.DataFrom = parse(tc.start[:10] + "T00:00:00Z")
-			req.State.DataTo = parse(tc.end[:10] + "T00:00:00Z")
+			req.State.DataFrom = parse(tc.start)
+			req.State.DataTo = parse(tc.end)
 			req.State.LastOperationAt = parse(tc.to)
 			req.State.CalculatedAt = parse(tc.to)
 			req.State.StaleAfter = timestamppb.New(parse(tc.end).AsTime().AddDate(1, 0, 0))
@@ -520,6 +529,11 @@ func retainedDSTScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceC
 				}
 				snap.Metrics = kept
 			}
+			for _, snapshot := range append([]*analyticsv1.PeriodSnapshot(nil), req.Periods...) {
+				full := proto.Clone(snapshot).(*analyticsv1.PeriodSnapshot)
+				full.Period, full.PeriodKey = commonv1.PeriodType_PERIOD_TYPE_ALL_TIME, "all_time"
+				req.Periods = append(req.Periods, full)
+			}
 			if _, e := ingest.UpsertUserMetrics(producerCtx, req); e != nil {
 				t.Fatal(e)
 			}
@@ -538,7 +552,7 @@ func retainedDSTScenarios(t *testing.T, ingest analyticsv1.MetricsIngestServiceC
 				}
 				point := screenBlock(got, "monthly_chart").Data.AsMap()["points"].([]any)[0].(map[string]any)
 				at, e := time.Parse(time.RFC3339Nano, point["data_to"].(string))
-				if e != nil || !at.Equal(parse(tc.to).AsTime()) || point["note"] != "неполные данные" {
+				if e != nil || !at.Equal(parse(tc.to).AsTime()) || (tc.note != "" && point["note"] != tc.note || tc.note == "" && point["note"] != nil) {
 					t.Fatalf("point instant/precision: %v %v", point, e)
 				}
 				action := category.Data.AsMap()["total"].(map[string]any)["action"].(map[string]any)["filter"].(map[string]any)

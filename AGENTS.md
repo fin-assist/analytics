@@ -2,7 +2,9 @@
 
 The Go service `analytics` of «Понятные финансы» (B2C personal finance: OFX statement import from T-Bank, operations,
 analytics, LLM assistant): it stores the ready personal metrics `bank-statement-data` sends and builds the Analytics
-screen from them. It does not reaggregate operations or choose financial bases/thresholds: only the display
+screen from them. FIN-416/420 additionally composes a regular-payment update solely from the verified BSD
+MetricProjection supplied by BFF; Apply commits only its marker, never a financial snapshot or overlay.
+It does not reaggregate operations or choose financial bases/thresholds: only the display
 quantities of `docs/calc.md` 1/5/10 and `docs/api.md` 6.1 are derived from persisted aggregates
 (monthly balance shares, textual comparisons/ratios, the collapsed payment remainder). Made from
 `fin-assist/go-service-template`. Read by Claude Code (through `CLAUDE.md`) and by Codex. This file is the orientation
@@ -449,3 +451,13 @@ If a pinned revision changes common/bootstrap.py, synchronize its exact scripts/
 FIN-391: GetAnalytics and ListPeriods use the canonical validation helper in grpc/metrics/analytics.go; BadRequest violations require a non-empty INVALID_FORMAT reason for finerr.ToREST. Incompatible coarse keys remain invalid; client navigation selects its own exact key.
 
 FIN-411: rolling_year/rolling_quarter (PeriodType5/6) use a rolling periodSelection alongside calendarSelection/allTimeSelection, with coverage-anchored calendar clamping; internal/domain/civil.go resolves first-real IANA boundaries for midnight gaps/repeats and skipped dates. Persist MonthlyPoint.calculation_range in existing metric details; render it as the point range and navigate by the full calendar month key. Missing/mismatched delivery is unavailable, not uncovered zero. Rolling ListPeriods reads state and both available headers in one SQL snapshot, selecting the first matching range (WITHOUT-first among matching headers); pure domain RollingPeriods shares RollingRange/TimeRange.SameBounds with screen selection. State ingest rejects a data_to that is not the first real profile civil-day instant via ValidateIngest; read-side Validate preserves legacy invariants. See docs/server.md and docs/schema.md; no schema migration or operation reaggregation.
+
+## FIN-416 runtime boundaries
+
+Released contracts gen/go v0.11.0 own MarkRecalculating, ApplyRegularPaymentDismissal, GetChartPage, help_text
+and source time_zone. Changes usecase owns the local marker/composition transaction and tombstone guard;
+gRPC regular_projection.go validates the bounded supplied payload before any effect. No BSD client, own regular
+baseline, overlay, retired-through state or extra final protocol belongs here. Chart pages and GetAnalytics read
+primary in coherent transactions; period_snapshot.time_zone is captured from its own ingest batch.
+See docs/server.md and docs/schema.md for invariants and rollout. The separate FIN-416 copy PR owns balance
+caption/annual forecast title; do not fold unrelated copy changes into this runtime increment.

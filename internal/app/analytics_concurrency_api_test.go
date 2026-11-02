@@ -36,6 +36,9 @@ func concurrentSnapshot(t *testing.T, version int32) *analyticsv1.UpsertUserMetr
 	r.Periods = nil
 	for _, key := range []string{selected, previous} {
 		for _, s := range base {
+			if s.Period != commonv1.PeriodType_PERIOD_TYPE_MONTH {
+				continue
+			}
 			copy := proto.Clone(s).(*analyticsv1.PeriodSnapshot)
 			start := monthStart(key)
 			end := start.AddDate(0, 1, 0)

@@ -35,7 +35,14 @@ func allTimeFixture(t *testing.T, mode int) domain.Analytics {
 		t.Fatal(err)
 	}
 	s := u.Snapshots[mode-1]
-	return domain.Analytics{AnalyticsData: domain.AnalyticsData{State: u.State, Snapshot: &s}, Key: s.Key, Range: *s.Range}
+	s.TimeZone = u.State.TimeZone
+	var chart *domain.ChartPage
+	for _, m := range s.Metrics {
+		if m.ID == "monthly_chart" {
+			chart = &domain.ChartPage{Details: m.Details, TimeZone: s.TimeZone, Revision: "fixture"}
+		}
+	}
+	return domain.Analytics{AnalyticsData: domain.AnalyticsData{Chart: chart, State: u.State, Snapshot: &s}, Key: s.Key, Range: *s.Range}
 }
 
 func TestUnitGroupedTilesPreserveEveryFactAndActionAcrossPeriodsAndModes(t *testing.T) {
@@ -294,7 +301,7 @@ func TestUnitAllTimeTimezoneRebuildRetainsFactsWithoutInventingDayPrecision(t *t
 		t.Fatal(err)
 	}
 	expense := valueOf(byID(got, "tiles"))["groups"].([]any)[0].(map[string]any)["tiles"].([]any)[0].(map[string]any)
-	if !strings.Contains(expense["caption"].(string), "всё время") || !strings.Contains(expense["caption"].(string), "идёт пересчёт") || !got.Period.Range.Start.AsTime().Equal(before) || expense["value"] != float64(35000) {
+	if !strings.Contains(expense["caption"].(string), "всё время") || !strings.Contains(expense["help_text"].(string), "идёт пересчёт") || !got.Period.Range.Start.AsTime().Equal(before) || expense["value"] != float64(35000) {
 		t.Fatal(expense)
 	}
 	s.State.Recalculating = false

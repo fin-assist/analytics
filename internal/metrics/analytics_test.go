@@ -125,7 +125,7 @@ func TestUnitScreenDefaultAndOldSnapshotRange(t *testing.T) {
 	if e != nil || got.Key.Key != key || store.key != nil {
 		t.Fatalf("default %+v %v", got, e)
 	}
-	store.data.Snapshot = &domain.Snapshot{Range: &domain.TimeRange{Start: &from, End: &to}}
+	store.data.Snapshot = &domain.Snapshot{TimeZone: "UTC", Range: &domain.TimeRange{Start: &from, End: &to}}
 	got, e = uc.Get(t.Context(), user, domain.PeriodMonth, nil, domain.TransferWith)
 	if e != nil || got.Current || !got.Range.End.Equal(to) {
 		t.Fatalf("old range %+v %v", got, e)

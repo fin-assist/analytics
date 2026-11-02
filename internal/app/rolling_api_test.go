@@ -29,23 +29,43 @@ func rollingRequest(t *testing.T) *analyticsv1.UpsertUserMetricsRequest {
 	return req
 }
 
+func appendRollingNavigation(req *analyticsv1.UpsertUserMetricsRequest, typ commonv1.PeriodType) {
+	for _, snapshot := range append([]*analyticsv1.PeriodSnapshot(nil), req.Periods...) {
+		if snapshot.Period != typ {
+			continue
+		}
+		full := proto.Clone(snapshot).(*analyticsv1.PeriodSnapshot)
+		full.Period, full.PeriodKey = commonv1.PeriodType_PERIOD_TYPE_ALL_TIME, "all_time"
+		full.Range = &commonv1.TimeRange{Start: req.State.DataFrom, End: req.State.DataTo}
+		full.Metrics = nil
+		for _, metric := range snapshot.Metrics {
+			if metric.MetricId != "monthly_chart" {
+				continue
+			}
+			metric = proto.Clone(metric).(*analyticsv1.MetricSnapshot)
+			for _, point := range metric.Metric.GetMonthlyChart().Points {
+				point.CalculationRange = nil
+			}
+			full.Metrics = append(full.Metrics, metric)
+		}
+		req.Periods = append(req.Periods, full)
+	}
+}
+
 func TestAPIRollingFactsSlicesModesKeysAndIsolation(t *testing.T) {
 	env, c := startAPI(t)
 	req := rollingRequest(t)
+	appendRollingNavigation(req, commonv1.PeriodType_PERIOD_TYPE_ROLLING_YEAR)
 	env.App.Now = func() time.Time { return req.State.CalculatedAt.AsTime() }
 	if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
 		t.Fatal(err)
 	}
 	for _, kind := range []commonv1.PeriodType{commonv1.PeriodType_PERIOD_TYPE_ROLLING_YEAR, commonv1.PeriodType_PERIOD_TYPE_ROLLING_QUARTER} {
 		key := "rolling_year"
-		count := 13
 		start := "2025-10-31T00:00:00+03:00"
-		month := "2025-10"
 		if kind == commonv1.PeriodType_PERIOD_TYPE_ROLLING_QUARTER {
 			key = "rolling_quarter"
-			count = 4
 			start = "2026-07-31T00:00:00+03:00"
-			month = "2026-07"
 		}
 		for _, mode := range []commonv1.TransferMode{commonv1.TransferMode_TRANSFER_MODE_WITH, commonv1.TransferMode_TRANSFER_MODE_WITHOUT} {
 			for _, date := range []*string{nil, proto.String(key)} {
@@ -64,13 +84,16 @@ func TestAPIRollingFactsSlicesModesKeysAndIsolation(t *testing.T) {
 				if len(tiles) != 4 || tiles[1].(map[string]any)["value"] != expected {
 					t.Fatalf("facts/modes %v", tiles)
 				}
+				if expectedStart, _ := time.Parse(time.RFC3339, start); !got.Period.Range.Start.AsTime().Equal(expectedStart) {
+					t.Fatal("rolling fact range changed", got.Period.Range)
+				}
 				chart := screenBlock(got, "monthly_chart").Data.AsMap()
 				points := chart["points"].([]any)
-				if len(points) != count || len(chart["notes"].([]any)) != 1 {
+				if len(points) != 13 || len(chart["notes"].([]any)) != 1 {
 					t.Fatalf("chart %v", chart)
 				}
 				first := points[0].(map[string]any)
-				if first["range"].(map[string]any)["from"] != start || first["value"] != float64(0) || first["action"].(map[string]any)["date"] != month {
+				if first["range"].(map[string]any)["from"] != "2025-10-01T00:00:00+03:00" || first["value"] != float64(0) || first["action"].(map[string]any)["date"] != "2025-10" {
 					t.Fatalf("edge/zero %v", first)
 				}
 				gap := points[len(points)-2].(map[string]any)
@@ -78,7 +101,7 @@ func TestAPIRollingFactsSlicesModesKeysAndIsolation(t *testing.T) {
 					t.Fatalf("unknown month became zero %v", gap)
 				}
 				last := points[len(points)-1].(map[string]any)
-				if last["range"].(map[string]any)["to"] != "2026-10-31T00:00:00+03:00" || last["value"] != expected {
+				if last["range"].(map[string]any)["to"] != "2026-11-01T00:00:00+03:00" || last["value"] != expected {
 					t.Fatalf("last slice %v", last)
 				}
 			}
@@ -232,6 +255,7 @@ func TestAPIRollingMidnightGapAndRepeatedMonthBoundary(t *testing.T) {
 					metric.Metric.Details = &analyticsv1.Metric_MonthlyChart{MonthlyChart: &analyticsv1.MonthlyChart{Points: []*analyticsv1.MonthlyPoint{{Month: tc.month, Range: &commonv1.TimeRange{Start: parse(tc.monthStart), End: parse(tc.monthEnd)}, CalculationRange: &commonv1.TimeRange{Start: parse(tc.sliceStart), End: sliceEnd}, ExpenseMinor: proto.Int64(0), IncomeMinor: proto.Int64(0), Bounds: &commonv1.DataBounds{Coverage: commonv1.Coverage_COVERAGE_PARTIAL, DataFrom: parse(tc.sliceStart), DataTo: timestamppb.New(sliceEnd.AsTime().Add(-time.Second))}}}}}
 				}
 			}
+			appendRollingNavigation(req, commonv1.PeriodType_PERIOD_TYPE_ROLLING_QUARTER)
 			if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
 				t.Fatal(err)
 			}

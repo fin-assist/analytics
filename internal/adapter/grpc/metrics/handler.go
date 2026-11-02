@@ -13,6 +13,7 @@ import (
 
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
 	commonv1 "github.com/fin-assist/contracts/gen/go/finassist/common/v1"
+	"github.com/fin-assist/contracts/gen/go/finerr"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,9 +38,9 @@ type ScreenUsecase interface {
 
 // Register registers MetricsIngestService and AnalyticsService on s. log records the
 // refused batches of the producer without their content.
-func Register(s *grpc.Server, uc Usecase, screen ScreenUsecase, composer *Composer, log *slog.Logger) {
-	analyticsv1.RegisterMetricsIngestServiceServer(s, &ingest{uc: uc, log: log})
-	analyticsv1.RegisterAnalyticsServiceServer(s, &analytics{uc: uc, screen: screen, composer: composer})
+func Register(s *grpc.Server, uc Usecase, screen ScreenUsecase, composer *Composer, changes ChangesUsecase, log *slog.Logger) {
+	analyticsv1.RegisterMetricsIngestServiceServer(s, &ingest{uc: uc, changes: changes, log: log})
+	analyticsv1.RegisterAnalyticsServiceServer(s, &analytics{uc: uc, screen: screen, composer: composer, changes: changes})
 }
 
 // invalidArgument is the bare refusal of a request that breaks the rules of the contract
@@ -50,8 +51,9 @@ func invalidArgument() error {
 
 type ingest struct {
 	analyticsv1.UnimplementedMetricsIngestServiceServer
-	uc  Usecase
-	log *slog.Logger
+	uc      Usecase
+	log     *slog.Logger
+	changes ChangesUsecase
 }
 
 // UpsertUserMetrics applies a batch of bank-statement-data. A batch that breaks a rule is
@@ -90,6 +92,7 @@ type analytics struct {
 	uc       Usecase
 	screen   ScreenUsecase
 	composer *Composer
+	changes  ChangesUsecase
 }
 
 // ListPeriods answers both models of the method (grpc-api.md 3.2): with a user token the
@@ -108,6 +111,9 @@ func (h *analytics) ListPeriods(ctx context.Context, req *analyticsv1.ListPeriod
 		return nil, validation("period")
 	}
 	periods, err := h.uc.Periods(ctx, userID, typ)
+	if errors.Is(err, domain.ErrSourceZone) {
+		return nil, finerr.WithRequestRetryInfo(finerr.InternalError(), true)
+	}
 	if errors.Is(err, domain.ErrInvalid) {
 		return nil, invalidArgument()
 	}
