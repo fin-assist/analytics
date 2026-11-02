@@ -13,7 +13,7 @@ COMMENT ON COLUMN period_snapshot.time_zone IS 'Исходный IANA-пояс �
 
 CREATE TABLE chart_cursor (
  user_id uuid NOT NULL REFERENCES user_data_state(user_id) ON DELETE CASCADE,
- transfer_mode smallint NOT NULL,
+ transfer_mode integer NOT NULL,
  revision text NOT NULL,
  page integer NOT NULL,
  token text NOT NULL UNIQUE,
