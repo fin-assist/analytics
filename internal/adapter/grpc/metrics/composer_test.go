@@ -94,6 +94,9 @@ func TestUnitComposerFullScreenKeepsFactsActionsAndTexts(t *testing.T) {
 		t.Fatal(ids)
 	}
 	tiles := valueOf(byID(got, "tiles"))["tiles"].([]any)
+	if tiles[0].(map[string]any)["caption"] != "46% дохода" {
+		t.Fatal("balance caption", tiles[0])
+	}
 	second := tiles[4].(map[string]any)
 	if second["id"] != "forecast" || second["value"] != float64(10120000) {
 		t.Fatal(second)

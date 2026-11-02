@@ -486,7 +486,7 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	share := "Доходов за период нет"
 	if detail := bal.GetBalance(); detail != nil && detail.ShareOfIncome != nil {
 		pct := int64(math.Floor(*detail.ShareOfIncome*100 + 0.5))
-		share = fmt.Sprintf("%d%% дохода · по выписке", pct)
+		share = fmt.Sprintf("%d%% дохода", pct)
 		if pct < 0 {
 			share = fmt.Sprintf("−%d%% · потратили больше, чем получили", -pct)
 		}
@@ -497,7 +497,7 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 	if p.s.Key.Type != domain.PeriodAllTime && p.s.Current && !p.s.Stale && forecast.GetLock().GetReason() != analyticsv1.LockReason_LOCK_REASON_STALE_DATA {
 		label := "Прогноз расходов"
 		if p.s.Key.Type == domain.PeriodYear {
-			label = "Прогноз на год"
+			label = "Прогноз расходов на год"
 		}
 		forecastTile = p.tile("forecast", label, forecast, p.forecastCaption())
 		forecastTile["approx"] = true
