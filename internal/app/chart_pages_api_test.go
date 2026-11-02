@@ -7,8 +7,10 @@ import (
 
 	analyticsv1 "github.com/fin-assist/contracts/gen/go/finassist/analytics/v1"
 	commonv1 "github.com/fin-assist/contracts/gen/go/finassist/common/v1"
+	userdeletionv1 "github.com/fin-assist/contracts/gen/go/finassist/userdeletion/v1"
 	"github.com/fin-assist/contracts/gen/go/finerr"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -93,6 +95,13 @@ func TestAPIChartPagesKeepAllMonthsAndRejectForeignOrStaleCursors(t *testing.T) 
 	meta := d["page"].(map[string]any)
 	cursor := meta["previous"].(string)
 	rev := meta["revision"]
+	for _, tc := range []struct{ cursor, reason string }{{"", "REQUIRED"}, {"not/base64!", "INVALID_FORMAT"}} {
+		_, err = c.analytics.GetChartPage(apitest.User(ctx, alice), &analyticsv1.GetChartPageRequest{Cursor: tc.cursor})
+		rest, ok := finerr.ToREST(err)
+		if status.Code(err) != codes.InvalidArgument || !ok || rest.Code != "VALIDATION_ERROR" || len(rest.Violations) != 1 || rest.Violations[0].Field != "cursor" || rest.Violations[0].Reason != tc.reason {
+			t.Fatalf("cursor %q: %v, want cursor/%s", tc.cursor, err, tc.reason)
+		}
+	}
 	page, err := c.analytics.GetChartPage(apitest.User(ctx, alice), &analyticsv1.GetChartPageRequest{Cursor: cursor})
 	if err != nil {
 		t.Fatal(err)
@@ -164,5 +173,12 @@ func TestAPIChartPagesKeepAllMonthsAndRejectForeignOrStaleCursors(t *testing.T) 
 		if !ok || rest.Code != "VALIDATION_ERROR" || len(rest.Violations) != 1 || rest.Violations[0].Field != "cursor" || rest.Violations[0].Reason != "OUT_OF_RANGE" {
 			t.Fatalf("degraded source (badMonth=%v) must invalidate cursor: %v", badMonth, err)
 		}
+	}
+	if _, err = c.deletion.PurgeUserData(apitest.Caller(ctx, "user"), &userdeletionv1.PurgeUserDataRequest{UserId: alice}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.analytics.GetChartPage(apitest.User(ctx, alice), &analyticsv1.GetChartPageRequest{Cursor: cursor})
+	if status.Code(err) != codes.Unauthenticated || apitest.Reason(err) != "TOKEN_REVOKED" {
+		t.Fatalf("deleted user's chart call: %v, want UNAUTHENTICATED TOKEN_REVOKED", err)
 	}
 }
