@@ -167,3 +167,8 @@ Apply проверяет supplied MetricProjection (включая привяз�
 Оба чтения используют primary и один согласованный снимок транзакции. Фактический пояс сохраняется с каждым
 period_snapshot из того же ingest-пакета; смешанный пояс ListPeriods временно даёт INTERNAL_ERROR/ retryable=true,
 а не неверные календарные подписи. Политика, миграция и проверки — docs/server.md, docs/schema.md и docs/testing.md.
+
+## Профильное ревью (FIN-421)
+
+Перед ревью применяются [профильные навыки](docs/review-skills/README.md) из проверяемой ревизии.
+Обязательные требования, выбор и ограничения — в `AGENTS.md`, раздел `Code Review Rules`.
