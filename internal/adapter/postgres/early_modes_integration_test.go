@@ -35,11 +35,11 @@ func TestIntegrationGlobalEarlyCompositionIsIndependentOfDeliveryMetadataForAllP
 		start := time.Date(2026, time.Month(period.month), 1, 0, 0, 0, 0, from.Location())
 		stop := start.AddDate(0, period.months, 0)
 		for _, mode := range domain.TransferModes {
-			snapshots = append(snapshots, domain.Snapshot{Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: period.typ, Key: period.key}, Mode: mode}, Range: &domain.TimeRange{Start: &start, End: &stop}, Coverage: domain.CoveragePartial, DataFrom: &from, DataTo: &last, CalculatedAt: &calculated, Revisions: state.Revisions,
+			snapshots = append(snapshots, domain.Snapshot{TimeZone: state.TimeZone, Key: domain.SnapshotKey{PeriodKey: domain.PeriodKey{Type: period.typ, Key: period.key}, Mode: mode}, Range: &domain.TimeRange{Start: &start, End: &stop}, Coverage: domain.CoveragePartial, DataFrom: &from, DataTo: &last, CalculatedAt: &calculated, Revisions: state.Revisions,
 				Metrics: []domain.Metric{{ID: "monthly_chart", DefinitionVersion: 1, Status: 3, Lock: &domain.Lock{Reason: 2, Required: ptr(int32(2)), Available: ptr(int32(1))}}}})
 		}
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	screen, err := usecase.NewScreen(repo, func() time.Time { return clock })
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestIntegrationGlobalEarlyCompositionIsIndependentOfDeliveryMetadataForAllP
 		if _, err := upsertState(ctx, pool, user, version, stateRowOf(state)); err != nil {
 			t.Fatal(err)
 		}
-		check := func(rollover, visible bool) {
+		check := func(rollover bool) {
 			t.Helper()
 			for _, period := range periods {
 				got, err := screen.Get(ctx, user, period.typ, &period.key, domain.TransferWithout)
@@ -88,25 +88,25 @@ func TestIntegrationGlobalEarlyCompositionIsIndependentOfDeliveryMetadataForAllP
 				for _, block := range response.Blocks {
 					if block.Id == "monthly_chart" {
 						found = true
-						if block.Status != "locked" || block.Lock.GetReason() != "need_months_with_data" || block.Lock.GetAvailable() != 1 {
+						if block.Status != "unavailable" {
 							t.Fatal(block)
 						}
 					}
 				}
-				if found != visible {
-					t.Fatalf("period %s known=%v rollover=%v chart=%v want%v", period.key, known, rollover, found, visible)
+				if !found {
+					t.Fatalf("period %s known=%v rollover=%v chart=%v", period.key, known, rollover, found)
 				}
 			}
 		}
-		check(false, false)
+		check(false)
 		clock = end.Add(10 * time.Hour)
-		check(true, true)
+		check(true)
 		daily := clock
 		state.CalculatedAt = &daily
 		state.FullMonths = 1
 		if _, err := upsertState(ctx, pool, user, version+1, stateRowOf(state)); err != nil {
 			t.Fatal(err)
 		}
-		check(false, true)
+		check(false)
 	}
 }

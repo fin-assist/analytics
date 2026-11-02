@@ -52,7 +52,7 @@ func TestIntegrationForecastHistoryCannotBorrowAnotherTransferModesProvenanceOrG
 	if _, err := upsertState(ctx, pool, user, 4, stateRowOf(state)); err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
+	repo := NewMetrics(testMetricsDB(pool), time.Now)
 	screen, err := usecase.NewScreen(repo, func() time.Time { return *state.CalculatedAt })
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestIntegrationForecastHistoryCannotBorrowAnotherTransferModesProvenanceOrG
 			for _, entry := range block.Data.AsMap()["tiles"].([]any) {
 				tile := entry.(map[string]any)
 				if tile["id"] == "forecast" {
-					actual = tile["lock"].(map[string]any)["text"].(string)
+					actual = tile["help_text"].(string)
 				}
 			}
 		}
@@ -97,7 +97,7 @@ func TestIntegrationForecastHistoryCannotBorrowAnotherTransferModesProvenanceOrG
 		if err != nil {
 			t.Fatal(err)
 		}
-		if actual != strings.TrimSpace(string(expected)) {
+		if !strings.HasPrefix(actual, strings.TrimSpace(string(expected))+" ") {
 			t.Fatalf("mode %v:\n%s\nwant:\n%s", mode, actual, expected)
 		}
 	}

@@ -27,9 +27,11 @@ import (
 // assistant without one and names the user in user_id.
 func AccessPolicy() server.Policy {
 	return server.Policy{
-		"/finassist.analytics.v1.AnalyticsService/*":       {Callers: []string{"bank-bff", "assistant"}, Model: server.ModelMixed},
-		"/finassist.analytics.v1.MetricsIngestService/*":   {Callers: []string{"bank-statement-data"}, Model: server.ModelSystem},
-		"/finassist.userdeletion.v1.UserDeletionService/*": {Callers: []string{"user"}, Model: server.ModelSystem},
+		"/finassist.analytics.v1.AnalyticsService/ApplyRegularPaymentDismissal": {Callers: []string{"bank-bff"}, Model: server.ModelUser},
+		"/finassist.analytics.v1.AnalyticsService/GetChartPage":                 {Callers: []string{"bank-bff"}, Model: server.ModelUser},
+		"/finassist.analytics.v1.AnalyticsService/*":                            {Callers: []string{"bank-bff", "assistant"}, Model: server.ModelMixed},
+		"/finassist.analytics.v1.MetricsIngestService/*":                        {Callers: []string{"bank-statement-data"}, Model: server.ModelSystem},
+		"/finassist.userdeletion.v1.UserDeletionService/*":                      {Callers: []string{"user"}, Model: server.ModelSystem},
 	}
 }
 
@@ -46,7 +48,7 @@ func MigrationSources() []migrate.Source {
 // and returns the background jobs and a function that closes what it opened. The order is
 // adapters → usecases → delivery.
 func wire(a *App) (jobs []worker.Job, closeAll func(), err error) {
-	repo := postgres.NewMetrics(a.DB)
+	repo := postgres.NewMetrics(a.DB, func() time.Time { return a.Now() })
 	incomplete, err := newIncompletePeriods(a.Registry, a.Log)
 	if err != nil {
 		return nil, nil, err
@@ -63,7 +65,11 @@ func wire(a *App) (jobs []worker.Job, closeAll func(), err error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	metricsgrpc.Register(a.GRPC.GRPC(), uc, screen, composer, a.Log)
+	changes, err := metrics.NewChanges(a.DB, a.Tombstones, repo)
+	if err != nil {
+		return nil, nil, err
+	}
+	metricsgrpc.Register(a.GRPC.GRPC(), uc, screen, composer, changes, a.Log)
 	deletions, err := tombstone.NewDeletionServer(transactor{a.DB}, a.Tombstones, repo.Purge)
 	if err != nil {
 		return nil, nil, err

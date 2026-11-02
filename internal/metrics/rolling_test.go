@@ -50,7 +50,7 @@ func TestUnitRollingScreenNeverMixesAnOldSnapshotWithANewAnchor(t *testing.T) {
 	end := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
 	first := from.AddDate(-2, 0, 0)
 	stale := end.AddDate(0, 0, 14)
-	snapshot := &domain.Snapshot{Range: &domain.TimeRange{Start: &from, End: &end}}
+	snapshot := &domain.Snapshot{TimeZone: "UTC", Range: &domain.TimeRange{Start: &from, End: &end}}
 	state := &domain.State{HasData: true, DataFrom: &first, DataTo: &end, LastOperationAt: &from, StaleAfter: &stale, TimeZone: "UTC", CalculatedAt: &end}
 	store := &screenStore{data: domain.AnalyticsData{State: state, Snapshot: snapshot}}
 	uc, _ := NewScreen(store, func() time.Time { return end })

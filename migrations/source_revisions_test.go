@@ -74,7 +74,7 @@ func TestIntegrationProvenanceUpgradeDoesNotInventLegacyBaselines(t *testing.T) 
 		if err = conn.QueryRow(t.Context(), `SELECT (to_jsonb(s)-'data_revisions')::text,data_revisions IS NULL FROM user_data_state s WHERE user_id=$1`, user).Scan(&stateAfter, &stateUnknown); err != nil {
 			t.Fatal(err)
 		}
-		if err = conn.QueryRow(t.Context(), `SELECT (to_jsonb(s)-'data_revisions')::text,data_revisions IS NULL FROM period_snapshot s WHERE user_id=$1`, user).Scan(&headerAfter, &headerUnknown); err != nil {
+		if err = conn.QueryRow(t.Context(), `SELECT (to_jsonb(s)-'data_revisions'-'time_zone')::text,data_revisions IS NULL AND time_zone IS NULL FROM period_snapshot s WHERE user_id=$1`, user).Scan(&headerAfter, &headerUnknown); err != nil {
 			t.Fatal(err)
 		}
 		if !stateUnknown || !headerUnknown || stateBefore != stateAfter || headerBefore != headerAfter {

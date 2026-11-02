@@ -38,7 +38,14 @@ func screenFixture(t *testing.T) domain.Analytics {
 		t.Fatal(e)
 	}
 	s := u.Snapshots[0]
-	return domain.Analytics{AnalyticsData: domain.AnalyticsData{State: u.State, Snapshot: &s, Previous: ptr("2026-08"), Next: ptr("2026-10")}, Key: s.Key, Range: *s.Range, Current: true}
+	s.TimeZone = u.State.TimeZone
+	var chart *domain.ChartPage
+	for _, m := range s.Metrics {
+		if m.ID == "monthly_chart" {
+			chart = &domain.ChartPage{Details: m.Details, TimeZone: s.TimeZone, Revision: "fixture"}
+		}
+	}
+	return domain.Analytics{AnalyticsData: domain.AnalyticsData{Chart: chart, State: u.State, Snapshot: &s, Previous: ptr("2026-08"), Next: ptr("2026-10")}, Key: s.Key, Range: *s.Range, Current: true}
 }
 func composerForTest(t *testing.T) *Composer {
 	t.Helper()
@@ -192,7 +199,7 @@ func TestUnitComposerSupportsExperimentsAndPeriodVariants(t *testing.T) {
 	chart.Lock = &domain.Lock{Reason: 2, Required: ptr(int32(2)), Available: ptr(int32(1))}
 	s.State.FullMonths = 0
 	got, e = c.Compose(t.Context(), s, nil, nil)
-	if e != nil || byID(got, "monthly_chart") != nil {
+	if e != nil || byID(got, "monthly_chart") == nil || byID(got, "monthly_chart").Status != "ready" {
 		t.Fatalf("early %+v %v", got, e)
 	}
 	s.Stale = true
@@ -231,6 +238,7 @@ func TestUnitComposerMissingCorruptAndUnsafeMetricsDegrade(t *testing.T) {
 	for i := range s.Snapshot.Metrics {
 		s.Snapshot.Metrics[i].Details = []byte("{")
 	}
+	s.Chart.Details = []byte("{")
 	if _, e = c.Compose(t.Context(), s, nil, nil); e == nil {
 		t.Fatal("all blocks broken accepted")
 	}
@@ -420,7 +428,7 @@ func TestUnitGetAnalyticsHandler(t *testing.T) {
 	f.err = nil
 	f.result = domain.Analytics{}
 	got, e = h.GetAnalytics(ctx, &analyticsv1.GetAnalyticsRequest{})
-	if e != nil || !proto.Equal(got, &analyticsv1.GetAnalyticsResponse{}) {
+	if e != nil || !proto.Equal(got, &analyticsv1.GetAnalyticsResponse{Calculation: &commonv1.CalculationState{}}) {
 		t.Fatalf("no data %+v %v", got, e)
 	}
 	f.result.State = &domain.State{HasData: false}
@@ -493,7 +501,7 @@ func TestUnitComposerCountersAndMalformedPresentationFacts(t *testing.T) {
 	}
 }
 
-func TestUnitGlobalEarlyChartCompositionMatchesKnownAndLegacyInventoryForAllPeriods(t *testing.T) {
+func TestUnitNavigationRemainsAvailableAcrossEarlySelectedPeriods(t *testing.T) {
 	for _, period := range []struct {
 		typ           domain.PeriodType
 		key           string
@@ -529,15 +537,15 @@ func TestUnitGlobalEarlyChartCompositionMatchesKnownAndLegacyInventoryForAllPeri
 				if err != nil {
 					t.Fatal(err)
 				}
-				if byID(got, "monthly_chart") != nil {
-					t.Fatalf("global early depends on metadata for %s", period.key)
+				if chart := byID(got, "monthly_chart"); chart == nil || chart.Status != "ready" {
+					t.Fatalf("history navigation hidden for early %s", period.key)
 				}
 				s.Rollover = true
 				got, err = composerForTest(t).Compose(t.Context(), s, nil, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if chart := byID(got, "monthly_chart"); chart == nil || chart.Status != "locked" {
+				if chart := byID(got, "monthly_chart"); chart == nil || chart.Status != "ready" {
 					t.Fatal("yesterday's full-month count hid today's chart", chart)
 				}
 				s.Rollover = false

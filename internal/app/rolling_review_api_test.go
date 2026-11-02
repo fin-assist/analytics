@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,57 @@ import (
 	"github.com/fin-assist/analytics/internal/app/apitest"
 )
 
+func TestAPIRollingZoneChangeKeepsStateAnchorUntilMatchingDelivery(t *testing.T) {
+	env, c := startAPI(t)
+	initial := rollingRequest(t)
+	env.App.Now = func() time.Time { return initial.State.CalculatedAt.AsTime() }
+	if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), initial); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("../../testdata/rolling.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := &analyticsv1.UpsertUserMetricsRequest{}
+	// The producer's new snapshot has the same civil dates in UTC, three hours later in time.
+	if err = protojson.Unmarshal([]byte(strings.ReplaceAll(string(raw), "+03:00", "Z")), ready); err != nil {
+		t.Fatal(err)
+	}
+	ready.State.TimeZone = "UTC"
+	ready.State.DataRevisions = revisionList(map[string]int64{"uploads": 1, "categories": 1, "time_zone": 2})
+	for _, snapshot := range ready.Periods {
+		snapshot.DataRevisions = revisionList(map[string]int64{"uploads": 1, "categories": 1, "time_zone": 2})
+	}
+	ready.CalcVersion = initial.CalcVersion + 2
+	pending := proto.Clone(ready).(*analyticsv1.UpsertUserMetricsRequest)
+	pending.CalcVersion--
+	pending.Periods, pending.State.DataRevisions = nil, nil
+	pending.State.Recalculating = true
+	for _, delivery := range []*analyticsv1.UpsertUserMetricsRequest{pending, ready} {
+		if _, err = c.ingest.UpsertUserMetrics(producer(t.Context()), delivery); err != nil {
+			t.Fatal(err)
+		}
+		for _, typ := range []commonv1.PeriodType{5, 6} {
+			for _, mode := range []commonv1.TransferMode{1, 2} {
+				got, err := c.analytics.GetAnalytics(apitest.User(t.Context(), alice), &analyticsv1.GetAnalyticsRequest{Period: typ, TransferMode: mode})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got.TimeZone != "UTC" || !got.Period.Range.End.AsTime().Equal(ready.State.DataTo.AsTime()) || got.Calculation.GetCalcVersion() != delivery.CalcVersion || got.Calculation.GetRecalculating() != delivery.State.Recalculating {
+					t.Fatalf("rolling source context mismatch: %v", got)
+				}
+				want := "ready"
+				if delivery == pending {
+					want = "unavailable"
+				}
+				if screenBlock(got, "tiles").Status != want || got.Period.Bounds.Coverage != commonv1.Coverage_COVERAGE_PARTIAL {
+					t.Fatalf("rolling state-only delivery fabricated facts: %v", got)
+				}
+			}
+		}
+	}
+}
+
 func TestAPILegacyNonCivilStateKeepsCalendarAndAllTimeReads(t *testing.T) {
 	env, c := startAPI(t)
 	req := rollingRequest(t)
@@ -30,7 +82,11 @@ func TestAPILegacyNonCivilStateKeepsCalendarAndAllTimeReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Periods = append(req.Periods, all.Periods...)
-	req.Periods = append(req.Periods, analyticsFixture(t).Periods...)
+	for _, snapshot := range analyticsFixture(t).Periods {
+		if snapshot.Period == commonv1.PeriodType_PERIOD_TYPE_MONTH {
+			req.Periods = append(req.Periods, snapshot)
+		}
+	}
 	env.App.Now = func() time.Time { return req.State.CalculatedAt.AsTime() }
 	if _, err = c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
 		t.Fatal(err)

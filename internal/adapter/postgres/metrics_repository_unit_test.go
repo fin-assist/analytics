@@ -74,7 +74,7 @@ type scriptedTx struct {
 func statementName(sql string) string {
 	for name, s := range map[string]string{
 		"state": upsertStateSQL, "headers": upsertHeadersSQL, "children": deleteChildrenSQL,
-		"gaps": insertGapsSQL, "metrics": insertMetricsSQL, "list": listPeriodsSQL, "purge": purgeSQL,
+		"gaps": insertGapsSQL, "metrics": insertMetricsSQL, "list": listPeriodsSQL, "purge": purgeSQL, "chart-head": chartHeadSQL, "purge-marker": purgeMarkerSQL,
 	} {
 		if s == sql {
 			return name
@@ -95,6 +95,29 @@ func (t *scriptedTx) Query(_ context.Context, sql string, _ ...any) (pgx.Rows, e
 	return &scriptedRows{}, nil
 }
 
+type scriptedRow struct {
+	rows pgx.Rows
+	err  error
+}
+
+func (r scriptedRow) Scan(dest ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	defer r.rows.Close()
+	if !r.rows.Next() {
+		if err := r.rows.Err(); err != nil {
+			return err
+		}
+		return pgx.ErrNoRows
+	}
+	return r.rows.Scan(dest...)
+}
+func (t *scriptedTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	rows, err := t.Query(ctx, sql, args...)
+	return scriptedRow{rows: rows, err: err}
+}
+
 func (t *scriptedTx) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
 	name := statementName(sql)
 	t.statements = append(t.statements, name)
@@ -106,7 +129,7 @@ func (*scriptedTx) Rollback(context.Context) error { return nil }
 
 func unitRepository(tx *scriptedTx) (*Metrics, *DB) {
 	db := &DB{transactions: pgstore.New(unitBeginner{tx})}
-	return NewMetrics(db), db
+	return NewMetrics(db, time.Now), db
 }
 
 func instant(day int) *time.Time {
@@ -272,7 +295,7 @@ func TestUnitUpsertStateAndPurge(t *testing.T) {
 		}
 		return repo.Purge(ctx, "u")
 	})
-	if err != nil || strings.Join(tx.statements, ",") != "state,purge" {
+	if err != nil || strings.Join(tx.statements, ",") != "state,purge,purge-marker" {
 		t.Fatalf("statements %v, %v", tx.statements, err)
 	}
 	boom := errors.New("boom")

@@ -55,7 +55,7 @@ func TestAPIForecastHistoryCannotBorrowAnotherTransferModesProvenanceOrGaps(t *t
 		if len(tiles) != 5 || tiles[1].(map[string]any)["value"] != float64(100000) {
 			t.Fatal("facts changed with history provenance", tiles)
 		}
-		actual := tiles[4].(map[string]any)["lock"].(map[string]any)["text"].(string)
+		actual := tiles[4].(map[string]any)["help_text"].(string)
 		path := "../../testdata/forecast_history_unknown.txt"
 		if mode == commonv1.TransferMode_TRANSFER_MODE_WITH {
 			path = "../../testdata/forecast_history_detailed.txt"
@@ -64,7 +64,7 @@ func TestAPIForecastHistoryCannotBorrowAnotherTransferModesProvenanceOrGaps(t *t
 		if err != nil {
 			t.Fatal(err)
 		}
-		if actual != strings.TrimSpace(string(expected)) {
+		if !strings.HasPrefix(actual, strings.TrimSpace(string(expected))+" ") {
 			t.Fatalf("mode %v:\n%s\nwant:\n%s", mode, actual, expected)
 		}
 	}

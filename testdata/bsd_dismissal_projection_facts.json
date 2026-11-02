@@ -1,0 +1,17 @@
+{
+  "calc_version": 1,
+  "dismissed_regular_payment_id": "01a19bb3-819e-7309-a19b-d3122d59c156",
+  "expected_count": 1,
+  "expected_currency": "RUB",
+  "expected_item_title": "Taxi",
+  "expected_monthly_amount_minor": 100000,
+  "expected_status": "READY",
+  "expected_time_zone": "Europe/Moscow",
+  "expected_value_minor": 100000,
+  "params": {
+    "month": "2026-09",
+    "transfer_mode": "with"
+  },
+  "source": "TestAPIExportFIN420Projection: real PostgreSQL18 + full BSD API + synthetic calculationRuleOFX, dismiss Cloud",
+  "user_id": "73ef1f95-14d5-453c-80ec-d0e2ac8c854d"
+}

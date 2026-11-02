@@ -96,6 +96,7 @@ func upsertProto(ctx context.Context, q querier, user string, version int32,
 		if err != nil {
 			return nil, err
 		}
+		s.TimeZone = "Europe/Moscow" // This helper publishes the Moscow fixtures without the ingest adapter.
 		ss = append(ss, s)
 	}
 	var rs []domain.PeriodKey
@@ -1249,8 +1250,8 @@ func TestIntegrationReadQueries(t *testing.T) {
 		if !got.state.hasData {
 			t.Fatal("the state is read without a snapshot")
 		}
-		if _, err := readAnalytics(ctx, db, newUser(99), pk(month, "2026-09", withTransfers)); !errors.Is(err, errNoState) {
-			t.Fatalf("unknown user: %v, want no rows (has_data = false)", err)
+		if got, err := readAnalyticsRows(ctx, db, newUser(99), pk(month, "2026-09", withTransfers), ptr("2026-09")); err != nil || got.hasState || got.state.recalculating {
+			t.Fatalf("unknown user metadata: %+v %v", got, err)
 		}
 	})
 
@@ -1495,7 +1496,7 @@ func TestIntegrationQueriesUsePrimaryKey(t *testing.T) {
 		// headers of one user), never the whole table.
 		{"headers and markers", upsertHeadersSQL, []any{user, int32(2), []int16{month, month}, []string{"2026-08", "2026-08"},
 			[]int16{withTransfers, withoutTransfers}, []bool{true, true}, []*time.Time{nil, nil}, []*time.Time{nil, nil},
-			[]*int16{nil, nil}, []*time.Time{nil, nil}, []*time.Time{nil, nil}, []*int32{nil, nil}, []*time.Time{nil, nil}, [][]byte{nil, nil}},
+			[]*int16{nil, nil}, []*time.Time{nil, nil}, []*time.Time{nil, nil}, []*int32{nil, nil}, []*time.Time{nil, nil}, [][]byte{nil, nil}, []*string{nil, nil}},
 			[]string{"period_snapshot_pkey"}, true, nil},
 		{"replace children", deleteChildrenSQL, applied, []string{"period_gap_pkey", "period_metric_pkey"}, false,
 			map[string]int{"AND (transfer_mode = a": 2}},

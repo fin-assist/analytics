@@ -55,15 +55,15 @@ RETURNING s.user_id`
 const upsertHeadersSQL = `
 INSERT INTO period_snapshot AS s
     (user_id, period_type, period_key, transfer_mode, calc_version, removed,
-     range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at,data_revisions)
+     range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at,data_revisions,time_zone)
 SELECT $1, p.period_type, p.period_key, p.transfer_mode, $2, p.removed,
        p.range_start, p.range_end, p.coverage, p.data_from, p.data_to, p.unread_lines_count, p.calculated_at,
-       CASE WHEN p.data_revisions IS NULL THEN NULL ELSE jsonb_build_object('calc_version',$2::integer,'revisions',p.data_revisions) END
+       CASE WHEN p.data_revisions IS NULL THEN NULL ELSE jsonb_build_object('calc_version',$2::integer,'revisions',p.data_revisions) END, p.time_zone
 FROM unnest($3::smallint[], $4::text[], $5::smallint[], $6::boolean[],
             $7::timestamptz[], $8::timestamptz[], $9::smallint[], $10::timestamptz[], $11::timestamptz[],
-            $12::integer[], $13::timestamptz[],$14::jsonb[])
+            $12::integer[], $13::timestamptz[],$14::jsonb[],$15::text[])
     AS p (period_type, period_key, transfer_mode, removed,
-          range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at,data_revisions)
+          range_start, range_end, coverage, data_from, data_to, unread_lines_count, calculated_at,data_revisions,time_zone)
 WHERE NOT p.removed OR NOT EXISTS (
     SELECT 1 FROM period_snapshot o
     WHERE o.user_id = $1 AND o.period_type = p.period_type AND o.period_key = p.period_key
@@ -80,6 +80,7 @@ SET calc_version = EXCLUDED.calc_version,
     unread_lines_count = EXCLUDED.unread_lines_count,
     calculated_at = EXCLUDED.calculated_at,
     data_revisions=EXCLUDED.data_revisions,
+    time_zone=EXCLUDED.time_zone,
     applied_at = now()
 WHERE s.calc_version <= EXCLUDED.calc_version
 RETURNING s.period_type, s.period_key, s.transfer_mode, s.removed`
@@ -141,14 +142,16 @@ WITH proven_state AS MATERIALIZED (
     SELECT s.user_id,s.time_zone,s.calc_version,CASE WHEN NOT EXISTS (
         SELECT 1 FROM period_snapshot newer
         WHERE newer.user_id = s.user_id AND newer.calc_version > s.calc_version
-    ) THEN s.data_revisions END AS proven_revisions
+    ) AND NOT EXISTS (SELECT 1 FROM recalculation_marker pending
+        WHERE pending.user_id=s.user_id AND pending.requested_version>s.calc_version)
+      THEN s.data_revisions END AS proven_revisions
     FROM user_data_state s WHERE s.user_id = $1
 )
-SELECT s.time_zone,p.period_key,p.range_start,p.range_end,p.coverage,s.proven_revisions,p.data_revisions,s.calc_version,p.calc_version
+SELECT CASE WHEN p.period_key IS NULL THEN s.time_zone ELSE p.time_zone END,p.period_key,p.range_start,p.range_end,p.coverage,s.proven_revisions,p.data_revisions,s.calc_version,p.calc_version
 FROM (VALUES ($1::uuid)) AS u (user_id)
 LEFT JOIN proven_state s ON s.user_id = u.user_id
 LEFT JOIN LATERAL (
-    SELECT DISTINCT ON (n.period_key) n.period_key,n.range_start,n.range_end,n.coverage,n.data_revisions,n.calc_version
+    SELECT DISTINCT ON (n.period_key) n.period_key,n.range_start,n.range_end,n.coverage,n.data_revisions,n.calc_version,n.time_zone
     FROM period_snapshot n
     WHERE n.user_id = u.user_id AND n.period_type = $2 AND NOT n.removed
     ORDER BY n.period_key DESC, n.transfer_mode DESC
@@ -168,10 +171,13 @@ type querier interface {
 }
 
 // Metrics is the repository of user metrics. It is safe for concurrent use.
-type Metrics struct{ db *DB }
+type Metrics struct {
+	db  *DB
+	now func() time.Time
+}
 
-// NewMetrics returns the repository over db.
-func NewMetrics(db *DB) *Metrics { return &Metrics{db: db} }
+// NewMetrics returns the repository over db with the source-calendar clock.
+func NewMetrics(db *DB, now func() time.Time) *Metrics { return &Metrics{db: db, now: now} }
 
 // UpsertState applies the state of one request. Call it inside db.Run, after the tombstone
 // guard and before UpsertPeriods: every request writes the state first, so concurrent requests
@@ -182,7 +188,10 @@ func (r *Metrics) UpsertState(ctx context.Context, userID string, version int32,
 		return err
 	}
 	_, err = upsertState(ctx, tx, userID, version, stateRowOf(s))
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // ErrTransactionRequired is a write called outside db.Run of this database: the statements
@@ -252,6 +261,9 @@ func listPeriods(ctx context.Context, q querier, userID string, typ domain.Perio
 		if err != nil {
 			return domain.Periods{}, err
 		}
+		if key != nil && (zone == nil || *zone == "" || (havePeriod && out.TimeZone != *zone)) {
+			return domain.Periods{}, domain.ErrSourceZone
+		}
 		if zone != nil {
 			out.TimeZone = *zone
 		}
@@ -292,6 +304,10 @@ func (r *Metrics) Purge(ctx context.Context, userID string) error {
 		return err
 	}
 	_, err = tx.Exec(ctx, purgeSQL, userID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, purgeMarkerSQL, userID)
 	return err
 }
 
@@ -339,6 +355,7 @@ type periodKey struct {
 
 // headerRow is a row of period_snapshot: a snapshot header or, with removed, a marker.
 type headerRow struct {
+	timeZone  *string
 	version   *int32
 	revisions []byte
 	periodKey
@@ -439,6 +456,7 @@ func headerOf(s domain.Snapshot) (headerRow, error) {
 		return headerRow{}, fmt.Errorf("coverage of %s: %w", s.Key.Key, err)
 	}
 	return headerRow{
+		timeZone:     ptr(s.TimeZone),
 		periodKey:    keyOf(s.Key),
 		rangeStart:   start,
 		rangeEnd:     end,
@@ -564,7 +582,8 @@ func upsertPeriods(ctx context.Context, q querier, user string, version int32,
 		column(headers, func(h headerRow) *time.Time { return h.dataTo }),
 		column(headers, func(h headerRow) *int32 { return h.unreadLines }),
 		column(headers, func(h headerRow) *time.Time { return h.calculatedAt }),
-		column(headers, func(h headerRow) []byte { return h.revisions }))
+		column(headers, func(h headerRow) []byte { return h.revisions }),
+		column(headers, func(h headerRow) *string { return h.timeZone }))
 	if err != nil {
 		return nil, err
 	}

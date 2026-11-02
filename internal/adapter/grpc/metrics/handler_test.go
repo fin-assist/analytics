@@ -282,7 +282,7 @@ func TestUnitListPeriods(t *testing.T) {
 
 func TestUnitRegister(t *testing.T) {
 	s := grpc.NewServer()
-	Register(s, &fakeUsecase{}, nil, nil, slog.New(slog.DiscardHandler))
+	Register(s, &fakeUsecase{}, nil, nil, nil, slog.New(slog.DiscardHandler))
 	info := s.GetServiceInfo()
 	if _, ok := info["finassist.analytics.v1.MetricsIngestService"]; !ok {
 		t.Fatal("MetricsIngestService not registered")

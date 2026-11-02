@@ -53,7 +53,7 @@ func TestAPIGlobalEarlyCompositionIsIndependentOfDeliveryMetadataForAllPeriods(t
 		if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), req); err != nil {
 			t.Fatal(err)
 		}
-		check := func(visible bool) {
+		check := func() {
 			t.Helper()
 			for _, period := range periods {
 				got, err := c.analytics.GetAnalytics(apitest.User(t.Context(), req.UserId), &analyticsv1.GetAnalyticsRequest{Period: period.typ, PeriodKey: proto.String(period.key), TransferMode: commonv1.TransferMode_TRANSFER_MODE_WITHOUT})
@@ -61,24 +61,21 @@ func TestAPIGlobalEarlyCompositionIsIndependentOfDeliveryMetadataForAllPeriods(t
 					t.Fatal(err)
 				}
 				block := screenBlock(got, "monthly_chart")
-				if visible {
-					if block == nil || block.Status != "locked" || block.Lock.GetReason() != "need_months_with_data" || block.Lock.GetAvailable() != 1 {
-						t.Fatalf("period %s known=%v chart=%v", period.key, known, block)
-					}
-				} else if block != nil {
-					t.Fatalf("period %s known=%v fabricated chart", period.key, known)
+				// Global full-month readiness cannot manufacture the independent navigation source.
+				if block == nil || block.Status != "unavailable" {
+					t.Fatalf("period %s known=%v chart=%v", period.key, known, block)
 				}
 			}
 		}
-		check(false)
+		check()
 		now = to.Add(10 * time.Hour)
-		check(true)
+		check()
 		req.State.CalculatedAt = timestamppb.New(now)
 		req.State.FullMonths = 1
 		daily := &analyticsv1.UpsertUserMetricsRequest{UserId: req.UserId, CalcVersion: version + 1, State: req.State}
 		if _, err := c.ingest.UpsertUserMetrics(producer(t.Context()), daily); err != nil {
 			t.Fatal(err)
 		}
-		check(true)
+		check()
 	}
 }

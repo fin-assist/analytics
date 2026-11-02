@@ -45,6 +45,9 @@ func (h *analytics) GetAnalytics(ctx context.Context, req *analyticsv1.GetAnalyt
 		return nil, errors.New("analytics: screen not wired")
 	}
 	screen, err := h.screen.Get(ctx, user, typ, req.PeriodKey, mode)
+	if errors.Is(err, domain.ErrSourceZone) {
+		return nil, finerr.WithRequestRetryInfo(finerr.InternalError(), true)
+	}
 	if errors.Is(err, domain.ErrInvalid) {
 		return nil, validation("date")
 	}
@@ -56,7 +59,7 @@ func (h *analytics) GetAnalytics(ctx context.Context, req *analyticsv1.GetAnalyt
 		if screen.State != nil {
 			revisions = screen.State.Revisions
 		}
-		return &analyticsv1.GetAnalyticsResponse{DataRevisions: revisionMessages(revisions)}, nil
+		return &analyticsv1.GetAnalyticsResponse{DataRevisions: revisionMessages(revisions), Calculation: calculation(screen)}, nil
 	}
 	response, err := h.composer.Compose(ctx, screen, req.Supports, req.Experiments)
 	if err != nil {
@@ -67,7 +70,12 @@ func (h *analytics) GetAnalytics(ctx context.Context, req *analyticsv1.GetAnalyt
 		revisions = screen.Snapshot.Revisions.Intersect(screen.State.Revisions)
 	}
 	response.DataRevisions = revisionMessages(revisions)
+	response.Calculation = calculation(screen)
 	return response, nil
+}
+
+func calculation(screen domain.Analytics) *commonv1.CalculationState {
+	return &commonv1.CalculationState{CalcVersion: screen.AppliedVersion, Recalculating: screen.Recalculating}
 }
 
 // A registry validation needs a violation reason for the BFF to preserve its HTTP 400 status.

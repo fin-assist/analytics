@@ -47,7 +47,7 @@ func TestAPIFactAndForecastHistoryAcrossCalendarYearAndDelivery(t *testing.T) {
 		if len(tiles) != 5 || tiles[1].(map[string]any)["id"] != "expense" || tiles[1].(map[string]any)["value"] != float64(100000) {
 			t.Fatal(tiles)
 		}
-		return tiles[4].(map[string]any)["lock"].(map[string]any)["text"].(string)
+		return tiles[4].(map[string]any)["help_text"].(string)
 	}
 	write()
 	text := forecastText(read())
@@ -159,7 +159,7 @@ func TestAPIDailyRolloverExplainsRetainedPartialMonthWithoutImport(t *testing.T)
 		t.Fatal(err)
 	}
 	tiles := screenBlock(got, "tiles").Data.AsMap()["tiles"].([]any)
-	text := tiles[4].(map[string]any)["lock"].(map[string]any)["text"].(string)
+	text := tiles[4].(map[string]any)["help_text"].(string)
 	if !strings.Contains(text, "Учтены полные месяцы: сентябрь 2026 — октябрь 2026.") || strings.Contains(text, "Неполные месяцы:") {
 		t.Fatal(text)
 	}
@@ -208,7 +208,7 @@ func TestAPIKnownSinglePartialMonthKeepsExplicitNoDataEmptyAndEarly(t *testing.T
 		t.Fatal(err)
 	}
 	legacyTiles := screenBlock(legacy, "tiles").Data.AsMap()["tiles"].([]any)
-	legacyText := legacyTiles[4].(map[string]any)["lock"].(map[string]any)["text"].(string)
+	legacyText := legacyTiles[4].(map[string]any)["help_text"].(string)
 	if strings.Contains(legacyText, "Учтены полные месяцы:") {
 		t.Fatal("unknown available fabricated zero", legacyText)
 	}
@@ -216,7 +216,7 @@ func TestAPIKnownSinglePartialMonthKeepsExplicitNoDataEmptyAndEarly(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if screenBlock(response, "monthly_chart") != nil || response.Navigation.GetPrevious() != "" || response.Navigation.GetNext() != "" {
+	if (screenBlock(response, "monthly_chart") == nil || screenBlock(response, "monthly_chart").Status != "unavailable") || response.Navigation.GetPrevious() != "" || response.Navigation.GetNext() != "" {
 		t.Fatal("no-data/early contract", response)
 	}
 	tiles := screenBlock(response, "tiles")

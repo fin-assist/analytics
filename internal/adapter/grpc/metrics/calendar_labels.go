@@ -28,8 +28,11 @@ func periodCalendarBounds(key domain.PeriodKey, zone *time.Location) (time.Time,
 		month = (quarter-1)*3 + 1
 		months = 3
 	}
-	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, zone)
-	return start, start.AddDate(0, months, 0), true
+	civil := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	next := civil.AddDate(0, months, 0)
+	start, startOK := domain.CivilBoundary(civil.Year(), civil.Month(), civil.Day(), zone)
+	end, endOK := domain.CivilBoundary(next.Year(), next.Month(), next.Day(), zone)
+	return start, end, startOK && endOK
 }
 
 func profileCalendarMatches(key domain.PeriodKey, r *domain.TimeRange, profile *time.Location) bool {
@@ -44,6 +47,9 @@ func profileCalendarMatches(key domain.PeriodKey, r *domain.TimeRange, profile *
 // boundaries agree with it. Rebuilding can retain a former IANA calendar even when
 // both endpoint offsets happen to match, so matching offsets alone is insufficient.
 func (p composition) preciseDays() bool {
+	if p.sourceRange != nil {
+		return profileCalendarMatches(p.s.Key.PeriodKey, &p.s.Range, p.zone)
+	}
 	if p.s.Key.Type == domain.PeriodAllTime {
 		return p.preciseAllTimeDays()
 	}
@@ -59,10 +65,17 @@ func (p composition) preciseDays() bool {
 
 func (p composition) precisePointDays(point *analyticsv1.MonthlyPoint) bool {
 	r := point.GetRange()
-	if !p.preciseDays() || r.GetStart() == nil || r.GetEnd() == nil {
+	if r.GetStart() == nil || r.GetEnd() == nil {
 		return false
 	}
 	start, end := r.Start.AsTime(), r.End.AsTime()
+	// A navigation page carries its own source zone independently of the selected screen.
+	if p.s.Chart != nil && p.zone != nil && p.s.Chart.TimeZone == p.zone.String() {
+		return profileCalendarMatches(domain.PeriodKey{Type: domain.PeriodMonth, Key: point.GetMonth()}, &domain.TimeRange{Start: &start, End: &end}, p.zone)
+	}
+	if !p.preciseDays() {
+		return false
+	}
 	if p.s.Key.Type.Rolling() {
 		return rollingMonthMatches(point.Month, start, end, p.zone)
 	}

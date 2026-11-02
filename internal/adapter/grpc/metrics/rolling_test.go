@@ -28,7 +28,17 @@ func rollingFixture(t *testing.T) *analyticsv1.UpsertUserMetricsRequest {
 	return req
 }
 
-func TestUnitRollingComposerKeepsSlicesAndCalendarActionsWithoutExtras(t *testing.T) {
+func rollingNavigation(t *testing.T, zone string) *domain.ChartPage {
+	t.Helper()
+	points := []*analyticsv1.MonthlyPoint{}
+	for i := range 13 {
+		key := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0).Format("2006-01")
+		points = append(points, navigationPoint(t, zone, key, commonv1.Coverage_COVERAGE_COMPLETE, ptr(int64(100000+i))))
+	}
+	return navigationFixture(t, zone, points...)
+}
+
+func TestUnitRollingComposerKeepsSelectedFactsAndFullHistoryNavigation(t *testing.T) {
 	req := rollingFixture(t)
 	converted, err := upsertOf(req)
 	if err != nil {
@@ -39,7 +49,8 @@ func TestUnitRollingComposerKeepsSlicesAndCalendarActionsWithoutExtras(t *testin
 	}
 	for _, snap := range converted.Snapshots {
 		t.Run(fmt.Sprint(snap.Key.Type.String(), snap.Key.Mode), func(t *testing.T) {
-			s := domain.Analytics{AnalyticsData: domain.AnalyticsData{State: converted.State, Snapshot: &snap}, Key: snap.Key, Range: *snap.Range}
+			snap.TimeZone = converted.State.TimeZone
+			s := domain.Analytics{AnalyticsData: domain.AnalyticsData{Chart: rollingNavigation(t, converted.State.TimeZone), State: converted.State, Snapshot: &snap}, Key: snap.Key, Range: *snap.Range}
 			got, err := composerForTest(t).Compose(t.Context(), s, nil, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -51,7 +62,7 @@ func TestUnitRollingComposerKeepsSlicesAndCalendarActionsWithoutExtras(t *testin
 			if len(tiles) != 4 {
 				t.Fatalf("forecast leaked: %v", tiles)
 			}
-			if caption := tiles[2].(map[string]any)["caption"]; caption != "По дням с данными не позже сегодня; пропуски не учитываются" {
+			if caption := tiles[2].(map[string]any)["caption"]; caption != "по покрытым дням" {
 				t.Fatalf("comparison leaked %v", caption)
 			}
 			chart := valueOf(byID(got, "monthly_chart"))
@@ -62,10 +73,7 @@ func TestUnitRollingComposerKeepsSlicesAndCalendarActionsWithoutExtras(t *testin
 				t.Fatalf("typical/comparison leaked %v", chart["notes"])
 			}
 			points := chart["points"].([]any)
-			want := 4
-			if snap.Key.Type == domain.PeriodRollingYear {
-				want = 13
-			}
+			want := 13
 			if len(points) != want {
 				t.Fatalf("points %d", len(points))
 			}
@@ -73,11 +81,11 @@ func TestUnitRollingComposerKeepsSlicesAndCalendarActionsWithoutExtras(t *testin
 				t.Fatal("edge month years ambiguous")
 			}
 			first := points[0].(map[string]any)
-			if first["range"].(map[string]any)["from"] != dateString(req.Periods[0].Range.Start, time.FixedZone("MSK", 10800)) && snap.Key.Type == domain.PeriodRollingQuarter {
-				t.Fatalf("edge widened %v", first)
+			if first["range"].(map[string]any)["from"] != "2025-10-01T00:00:00+03:00" || first["range"].(map[string]any)["to"] != "2025-11-01T00:00:00+03:00" || first["value"] != float64(100000) {
+				t.Fatalf("navigation did not use full calendar history: %v", first)
 			}
-			if first["action"].(map[string]any)["date"] != req.Periods[0].GetMetrics()[len(req.Periods[0].Metrics)-1].Metric.GetMonthlyChart().Points[0].Month && snap.Key.Type == domain.PeriodRollingQuarter {
-				t.Fatal("wrong calendar action")
+			if first["action"].(map[string]any)["date"] != "2025-10" || !proto.Equal(got.Period.Range, timerange(snap.Range)) {
+				t.Fatal("navigation changed selected rolling facts")
 			}
 			for _, raw := range points {
 				point := raw.(map[string]any)
@@ -127,6 +135,8 @@ func TestUnitRollingMissingAndMalformedDeliveryNeverInventsFacts(t *testing.T) {
 		t.Fatalf("fabricated missing period %v", got)
 	}
 	s.Snapshot = &u.Snapshots[0]
+	s.Snapshot.TimeZone = u.State.TimeZone
+	s.Chart = rollingNavigation(t, u.State.TimeZone)
 	holder, err := metric(s.Snapshot.Metrics[len(s.Snapshot.Metrics)-1])
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +175,7 @@ func TestUnitRollingMissingAndMalformedDeliveryNeverInventsFacts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if byID(got, "monthly_chart").Status != "unavailable" || byID(got, "tiles").Status != "ready" {
+		if byID(got, "monthly_chart").Status != "ready" || valueOf(byID(got, "monthly_chart"))["notes"] != nil || byID(got, "tiles").Status != "ready" {
 			t.Fatalf("malformed %s escaped isolation: %v", change, got)
 		}
 	}

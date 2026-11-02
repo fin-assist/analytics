@@ -72,6 +72,13 @@ func (m *Metrics) Upsert(ctx context.Context, u domain.Upsert) (Result, error) {
 	if err := u.Validate(); err != nil {
 		return Result{}, err
 	}
+	// Carry the source zone from this batch, including delayed chunks of an older generation.
+	if u.State != nil {
+		u.Snapshots = append([]domain.Snapshot(nil), u.Snapshots...)
+		for i := range u.Snapshots {
+			u.Snapshots[i].TimeZone = u.State.TimeZone
+		}
+	}
 	var applied int
 	deleted := false
 	err := m.tx.Run(ctx, func(ctx context.Context) error {

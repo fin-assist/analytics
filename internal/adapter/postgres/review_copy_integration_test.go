@@ -44,8 +44,9 @@ func TestIntegrationReviewCopyPreservesStoredFinancialValues(t *testing.T) {
 	if _, err := upsertState(ctx, pool, user, 1, state); err != nil {
 		t.Fatal(err)
 	}
-	repo := NewMetrics(&DB{primary: pool, replica: pool})
-	screen, err := usecase.NewScreen(repo, func() time.Time { return req.State.CalculatedAt.AsTime() })
+	now := func() time.Time { return req.State.CalculatedAt.AsTime() }
+	repo := NewMetrics(testMetricsDB(pool), now)
+	screen, err := usecase.NewScreen(repo, now)
 	if err != nil {
 		t.Fatal(err)
 	}

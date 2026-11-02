@@ -68,7 +68,7 @@ func start(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := postgres.NewMetrics(db)
+	repo := postgres.NewMetrics(db, time.Now)
 	seen := &observed{}
 	uc, err := metrics.New(db, repo, stones, seen)
 	if err != nil {

@@ -31,7 +31,11 @@ func TestUnitFactTileSurvivesLockedForecastAndPastPeriod(t *testing.T) {
 			if len(tiles) != 5 || tiles[4].(map[string]any)["status"] != "locked" {
 				t.Fatal(tiles)
 			}
-			text := tiles[4].(map[string]any)["lock"].(map[string]any)["text"].(string)
+			text := tiles[4].(map[string]any)["help_text"].(string)
+			visible := tiles[4].(map[string]any)["lock"].(map[string]any)["text"].(string)
+			if visible != "Нужно 12 полных месяцев, есть 11" {
+				t.Fatal(visible)
+			}
 			if !strings.Contains(text, "независимо от выбранного года") || !strings.Contains(text, "данными за каждый день") {
 				t.Fatal(text)
 			}
@@ -106,7 +110,7 @@ func TestUnitForecastHistoryCompressesOnlyConsecutiveMonths(t *testing.T) {
 	}
 }
 
-func TestUnitKnownEarlyInventoryHidesChartForExplicitNoDataPeriod(t *testing.T) {
+func TestUnitHistoryNavigationSurvivesExplicitNoDataSelectedPeriod(t *testing.T) {
 	s := screenFixture(t)
 	s.Snapshot = nil
 	s.History = &domain.ForecastHistory{Months: []domain.HistoryMonth{{Key: "2026-09", Coverage: domain.CoveragePartial}}}
@@ -114,9 +118,10 @@ func TestUnitKnownEarlyInventoryHidesChartForExplicitNoDataPeriod(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if byID(got, "monthly_chart") != nil {
-		t.Fatal("global early chart fabricated for no-data period")
+	if chart := byID(got, "monthly_chart"); chart == nil || chart.Status != "ready" {
+		t.Fatal("existing history hidden for no-data selection")
 	}
+	s.Chart = nil
 	s.History = nil
 	got, err = composerForTest(t).Compose(t.Context(), s, nil, nil)
 	if err != nil {

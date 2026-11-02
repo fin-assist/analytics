@@ -62,7 +62,12 @@ func dateString(t *timestamppb.Timestamp, zone *time.Location) any {
 	if t == nil {
 		return nil
 	}
-	return t.AsTime().In(zone).Format(time.RFC3339Nano)
+	local := t.AsTime().In(zone)
+	_, offset := local.Zone()
+	if offset%60 != 0 {
+		local = local.UTC()
+	}
+	return local.Format(time.RFC3339Nano)
 }
 func rangeJSON(r *commonv1.TimeRange, zone *time.Location) map[string]any {
 	return map[string]any{"from": dateString(r.GetStart(), zone), "to": dateString(r.GetEnd(), zone)}
@@ -135,7 +140,7 @@ func lockJSON(l *commonv1.BlockLock, zone *time.Location) map[string]any {
 		out["available"] = l.GetAvailable()
 	}
 	if l.AvailableFrom != nil {
-		out["available_from"] = l.AvailableFrom.AsTime().In(zone).Format(time.RFC3339Nano)
+		out["available_from"] = dateString(l.AvailableFrom, zone)
 	}
 	return out
 }
