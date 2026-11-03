@@ -49,7 +49,7 @@ Metadata привязана к версии финансовой строки: �
 cmd/analytics/                     main: serve and migrate commands, listeners, shutdown
 internal/app/                      assembly: identity, pools, server, wire() (handlers, clients, jobs), access table, migration sources
 internal/app/apitest/              the whole service in-process for API tests
-internal/domain/                   entities and invariants, no infrastructure imports
+internal/domain/                   entities, invariants and cross-layer constants (values only), no infrastructure imports
 internal/metrics/                  persistence usecases and screen selection/current-time flags; consumer interfaces
 internal/adapter/grpc/metrics/     gRPC handlers and presentation: typed snapshots -> blocks and server texts
 internal/adapter/postgres/         pools, go-postgres adapter, the metrics repository on pgx
@@ -167,3 +167,12 @@ Apply проверяет supplied MetricProjection (включая привяз�
 Оба чтения используют primary и один согласованный снимок транзакции. Фактический пояс сохраняется с каждым
 period_snapshot из того же ingest-пакета; смешанный пояс ListPeriods временно даёт INTERNAL_ERROR/ retryable=true,
 а не неверные календарные подписи. Политика, миграция и проверки — docs/server.md, docs/schema.md и docs/testing.md.
+
+## Профильное ревью (FIN-421)
+
+Перед ревью применяются [профильные навыки](docs/review-skills/README.md) из проверяемой ревизии.
+Обязательные требования, выбор и ограничения — в `AGENTS.md`, раздел `Code Review Rules`.
+
+FIN-421: доменный уровень владеет также межслойными константами, включая технические значения;
+это только значения, без переноса внешнего поведения или инфраструктурных импортов в `internal/domain`.
+Незатронутый Go-код по этому правилу массово не перерабатывается; комментарии пакета уточняются вместе с фактическим переносом констант.
