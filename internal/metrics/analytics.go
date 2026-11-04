@@ -152,9 +152,13 @@ func calendarRange(typ domain.PeriodType, key string, zone *time.Location) (time
 		month = (quarter-1)*3 + 1
 		months = 3
 	}
-	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, zone)
-	end := start.AddDate(0, months, 0)
-	if start.Year() < 1 || end.Year() > 9999 {
+	// Shift civil dates before resolving either IANA boundary: a midnight gap can
+	// normalize time.Date into the previous day or a later hour of the same day.
+	civil := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	next := civil.AddDate(0, months, 0)
+	start, startOK := domain.CivilBoundary(civil.Year(), civil.Month(), civil.Day(), zone)
+	end, endOK := domain.CivilBoundary(next.Year(), next.Month(), next.Day(), zone)
+	if !startOK || !endOK {
 		return time.Time{}, time.Time{}, fmt.Errorf("%w: period range", domain.ErrInvalid)
 	}
 	return start, end, nil
