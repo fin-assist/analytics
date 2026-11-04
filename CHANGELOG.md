@@ -32,9 +32,8 @@
 - Пример unit-файла стенда `deploy/systemd/analytics.service` запускается при `ENV=stage`: ключ подписи стенда передаётся через `LoadCredential=stage-signing`, `AUTH_STAGE_SIGNING_KEY_FILE` и `AUTH_STAGE_PUBLIC_KEYS_FILE` заданы активными `Environment=`, `SERVICE_NAME=analytics` (kid/sub ключа подписи) задаёт сам unit, шапка называет режимы файлов ключей (ключ 0600 root, общий JWKS 0644); в env-файле остаются `AUTH_STAGE_ISSUER`, `AUTH_USER_ISSUER`, `AUTH_USER_AUDIENCE`, `PEER_USER_ADDR`. Устаревший комментарий про `SERVICE_TOKEN_FILE` удалён; unit-тест загружает конфигурацию из unit-файла. Версии библиотек в `AGENTS.md`, README и `docs/` приведены к `go.mod` (go-postgres v0.3.0, go-migrate v0.1.1, go-grpc v0.2.0) (FIN-347).
 
 ### Изменено
-- FIN-421: состав существующих навыков PR-ревью подобран по назначению репозитория; источники, лицензии и выбор согласованы с AGENTS.md. Добавлена проверка оптимальности изменяемых запросов PostgreSQL. Runtime и публичный API не меняются.
 
-- FIN-421: ревью выбирает и читает профильные материалы из репозитория; AGENTS.md сохраняет обязательные проверки и требует минимальную достаточную сложность и константы Go по слою использования. Runtime и публичный API не меняются.
+- FIN-421: состав существующих навыков PR-ревью подобран по назначению репозитория; источники, лицензии и выбор согласованы с AGENTS.md. Добавлена проверка оптимальности изменяемых запросов PostgreSQL. Runtime и публичный API не меняются.
 
 - `go-grpc` v0.1.0 → v0.2.0: вызов смешанного метода от `bank-bff` без проверенного токена пользователя получает `INVALID_TOKEN`, а не системный вариант с `user_id` из запроса (FIN-299, нужен для `ListPeriods`). Предложенные в FIN-113 запросы записи и отображение снимка перенесены из тестов `migrations/` в репозиторий `internal/adapter/postgres/metrics.go`, тесты схемы — в тот же пакет; `ListPeriods` читает пояс и периоды одним оператором (FIN-283).
 - `make test-names` проверяет и fuzz-цели (`FuzzUnit…`/`FuzzIntegration…`/`FuzzAPI…`, seed-корпус — в своём наборе) и отклоняет `Example…`; сборщики выбирают `^(Test|Fuzz)<Suite>` (FIN-290, перенос go-service-template#26).
