@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,6 +88,42 @@ func TestIntegrationReviewCopyPreservesStoredFinancialValues(t *testing.T) {
 			}
 			if tiles["expense"]["value"] != float64(8432000) || tiles["income"]["value"] != float64(15690000) {
 				t.Fatalf("actual financial values changed: %v", tiles)
+			}
+			const dailyID = "daily_expense"
+			const helpKey = "help_text"
+			const captionKey = "caption"
+			const valueKey = "value"
+			const statusKey = "status"
+			const expectedHelp = "По дням с данными не позже сегодня; пропуски не учитываются"
+			legacyDaily := tiles[dailyID]
+			if legacyDaily[helpKey] != expectedHelp || legacyDaily[captionKey] != "в августе — 2 890 ₽" || legacyDaily[valueKey] != float64(337280) || legacyDaily[statusKey] != "ready" {
+				t.Fatalf("persisted daily value/comparison/methodology changed: %v", legacyDaily)
+			}
+			grouped, err := composer.Compose(ctx, selected, []*commonv1.BlockSupport{{Type: "tile_group", MaxVersion: 2}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			foundDaily := false
+			for _, block := range grouped.Blocks {
+				if block.Id != "tiles" {
+					continue
+				}
+				for _, group := range block.Data.AsMap()["groups"].([]any) {
+					for _, entry := range group.(map[string]any)["tiles"].([]any) {
+						tile := entry.(map[string]any)
+						if tile["id"] != dailyID {
+							continue
+						}
+						foundDaily = true
+						caption, _ := tile[captionKey].(string)
+						if tile[helpKey] != expectedHelp || tile[captionKey] != legacyDaily[captionKey] || strings.Contains(caption, "пропуски") || tile[valueKey] != legacyDaily[valueKey] || tile[statusKey] != legacyDaily[statusKey] {
+							t.Fatalf("grouping changed persisted daily values or text roles: %v", tile)
+						}
+					}
+				}
+			}
+			if !foundDaily {
+				t.Fatal("grouped daily expense tile missing")
 			}
 		})
 	}

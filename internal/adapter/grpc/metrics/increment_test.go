@@ -17,6 +17,8 @@ import (
 	usecase "github.com/fin-assist/analytics/internal/metrics"
 )
 
+const expectedDailyHelpText = "По дням с данными не позже сегодня; пропуски не учитываются"
+
 func allTimeFixture(t *testing.T, mode int) domain.Analytics {
 	t.Helper()
 	raw, err := os.ReadFile("../../../../testdata/all_time.json")
@@ -104,8 +106,12 @@ func TestUnitGroupedTilesPreserveEveryFactAndActionAcrossPeriodsAndModes(t *test
 							t.Fatalf("%v mode%d %s %s changed", typ, mode, id, field)
 						}
 					}
-					if id == "daily_expense" && (m["status"] == "ready" || m["status"] == "tentative") && !strings.HasPrefix(m["caption"].(string), "По дням с данными не позже сегодня; пропуски не учитываются") {
-						t.Fatal(m)
+					if id == "daily_expense" && (m["status"] == "ready" || m["status"] == "tentative") {
+						const helpKey = "help_text"
+						const captionKey = "caption"
+						if m[helpKey] != expectedDailyHelpText || previous[helpKey] != expectedDailyHelpText || m[captionKey] != previous[captionKey] {
+							t.Fatalf("daily methodology must stay in help without changing its comparison: %v vs %v", m, previous)
+						}
 					}
 				}
 				if !reflect.DeepEqual(ids[:4], []string{"expense", "income", "balance", "daily_expense"}) {
@@ -397,10 +403,7 @@ func TestUnitAllTimeRebuildCaptionsHaveOnePrepositionAndExactEmptyText(t *testin
 			daily = valueOf(byID(got, "tiles"))["groups"].([]any)[1].(map[string]any)["tiles"].([]any)[0].(map[string]any)
 		}
 		want := "в среднем за всё время · неполные данные · идёт пересчёт"
-		if version == 2 {
-			want = "По дням с данными не позже сегодня; пропуски не учитываются\n" + want
-		}
-		if daily["caption"] != want {
+		if daily["caption"] != want || daily["help_text"] != expectedDailyHelpText {
 			t.Fatalf("v%d daily caption=%q want=%q", version, daily["caption"], want)
 		}
 		for _, tc := range []struct{ id, want string }{{"expense_categories", "Расходы по категориям: за всё время нет · неполные данные · идёт пересчёт"}, {"income_categories", "Доходы по категориям: за всё время нет · неполные данные · идёт пересчёт"}} {
