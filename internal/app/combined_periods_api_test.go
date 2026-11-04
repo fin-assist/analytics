@@ -3,6 +3,7 @@ package app_test
 import (
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +62,34 @@ func TestAPICombinedCalendarAllTimeAndRollingKeepTheirRangesAndFacts(t *testing.
 				if tiles == nil || tiles.V != version || tiles.Status != "ready" {
 					t.Fatal(tiles)
 				}
+				payload := tiles.Data.AsMap()
+				var dailyRows []any
+				if version == 1 {
+					dailyRows = payload["tiles"].([]any)
+				} else {
+					for _, group := range payload["groups"].([]any) {
+						dailyRows = append(dailyRows, group.(map[string]any)["tiles"].([]any)...)
+					}
+				}
+				foundDaily := false
+				for _, entry := range dailyRows {
+					tile := entry.(map[string]any)
+					if tile["id"] != "daily_expense" {
+						continue
+					}
+					foundDaily = true
+					const expectedHelp = "По дням с данными не позже сегодня; пропуски не учитываются"
+					caption, _ := tile["caption"].(string)
+					if tile["help_text"] != expectedHelp || strings.Contains(caption, "пропуски") {
+						t.Fatalf("%s mode%d v%d methodology role: %v", tc.key, mode, version, tile)
+					}
+					if tc.typ == commonv1.PeriodType_PERIOD_TYPE_MONTH && caption != "в августе — 2 890 ₽" {
+						t.Fatalf("monthly comparison changed: %v", tile)
+					}
+				}
+				if !foundDaily {
+					t.Fatal("daily expense tile missing")
+				}
 				if version == 1 {
 					legacy = got
 					continue
@@ -82,7 +111,7 @@ func TestAPICombinedCalendarAllTimeAndRollingKeepTheirRangesAndFacts(t *testing.
 					for _, item := range group.(map[string]any)["tiles"].([]any) {
 						tile := item.(map[string]any)
 						before := flat[tile["id"].(string)]
-						for _, field := range []string{"status", "value", "value_kind", "action", "lock"} {
+						for _, field := range []string{"status", "value", "value_kind", "action", "lock", "caption", "help_text"} {
 							if !reflect.DeepEqual(tile[field], before[field]) {
 								t.Fatalf("%s financial %s changed: %v vs %v", tc.key, field, tile, before)
 							}

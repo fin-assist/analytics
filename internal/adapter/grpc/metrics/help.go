@@ -10,6 +10,9 @@ import (
 	"github.com/fin-assist/analytics/internal/domain"
 )
 
+const dailyExpenseTileID = "daily_expense"
+const dailyExpenseHelp = "По дням с данными не позже сегодня; пропуски не учитываются"
+
 // The compact lock stays visible; coverage and methodology are explicitly auxiliary.
 func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockLock {
 	out := p.detailedLock(id, l)
@@ -24,6 +27,9 @@ func (p composition) lock(id string, l *analyticsv1.MetricLock) *commonv1.BlockL
 
 func (p composition) help(id string, m *analyticsv1.Metric) string {
 	parts := []string{}
+	if id == dailyExpenseTileID && ready(m) {
+		parts = append(parts, dailyExpenseHelp)
+	}
 	if metricStatus(m) == "locked" {
 		detail, short := p.detailedLock(id, m.GetLock()).Text, p.lock(id, m.GetLock()).Text
 		if detail != short {

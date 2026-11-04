@@ -43,22 +43,15 @@ func (p composition) groupTiles(b *commonv1.Block) error {
 		}
 		byID[id] = tile
 	}
-	for _, id := range []string{"expense", "income", "balance", "daily_expense"} {
+	for _, id := range []string{"expense", "income", "balance", dailyExpenseTileID} {
 		if byID[id] == nil {
 			return errors.New("required fact tile absent")
 		}
 	}
 	byID["expense"]["title"] = "Расходы за период"
 	byID["income"]["title"] = "Доходы за период"
-	daily := byID["daily_expense"]
+	daily := byID[dailyExpenseTileID]
 	daily["title"] = "Средние расходы в день"
-	if daily["status"] == "ready" || daily["status"] == "tentative" {
-		caption := "По дням с данными не позже сегодня; пропуски не учитываются"
-		if previous, ok := daily["caption"].(string); ok && strings.TrimSpace(previous) != "" && previous != caption {
-			caption += "\n" + previous
-		}
-		daily["caption"] = caption
-	}
 	facts := []any{byID["expense"], byID["income"], byID["balance"]}
 	additional := []any{daily}
 	if forecast := byID["forecast"]; forecast != nil {

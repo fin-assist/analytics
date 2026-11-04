@@ -532,11 +532,8 @@ func (p composition) tiles(ctx context.Context) (*commonv1.Block, error) {
 			dailyCaption = "в " + monthPrep[calendarMonth(cmp.Range.Start).Month()-1] + " — " + money(cmp.GetValueMinor())
 		}
 	}
-	tiles := []any{p.tile("balance", "Доходы минус расходы", bal, share), actual, p.tile("daily_expense", "Расходы в день", daily, dailyCaption), p.tile("income", "Доходы", income, "")}
+	tiles := []any{p.tile("balance", "Доходы минус расходы", bal, share), actual, p.tile(dailyExpenseTileID, "Расходы в день", daily, dailyCaption), p.tile("income", "Доходы", income, "")}
 	tiles[3].(map[string]any)["show_plus"] = true
-	if p.s.Key.Type.Rolling() {
-		tiles[2].(map[string]any)["help_text"] = "Средние расходы по покрытым дням не позже сегодня; пропуски не учитываются"
-	}
 	if forecastTile != nil {
 		tiles = append(tiles, forecastTile)
 	}
